@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wisher - Smart Wishlist Manager</title>
+    
+    <!-- Material Design CSS -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    
+    <!-- QR Code Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <!-- Sortable.js for drag and drop -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    
+    <!-- Marked.js for markdown support -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+</head>
+<body>
+    <div id="app-bar" class="app-bar">
+        <button id="menuButton" class="icon-button menu-button"><i class="material-icons">menu</i></button>
+        <span id="app-bar-title" class="app-bar-title">Wisher</span>
+        <button id="authButton" class="btn btn-secondary">Login</button>
+    </div>
+
+    <!-- Sidebar -->
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h3>Your Lists</h3>
+            <button id="sidebarCloseBtn" class="icon-button"><i class="material-icons">close</i></button>
+        </div>
+        <ul id="sidebarListContainer" class="sidebar-list">
+            <!-- Lists will be dynamically loaded here -->
+        </ul>
+        <button id="createListSidebarBtn" class="btn btn-primary create-list-sidebar-btn">+ Create New List</button>
+    </div>
+
+    <div class="main-content">
+        <!-- Screens -->
+        <div id="authScreen" class="screen">
+            <div class="auth-container">
+                <div class="auth-card">
+                    <h2>Welcome to Wisher</h2>
+                    <p>Sign in to create and manage your wishlists</p>
+                    
+                    <div class="auth-buttons">
+                        <button class="btn btn-primary" id="googleSignIn">
+                            <span class="material-icons">login</span>
+                            Sign in with Google
+                        </button>
+                        <button class="btn btn-secondary" id="emailSignIn">
+                            <span class="material-icons">email</span>
+                            Sign in with Email
+                        </button>
+                    </div>
+                    
+                    <div id="emailAuthForm" class="email-auth-form hidden">
+                        <div class="input-group">
+                            <input type="email" id="emailInput" placeholder="Email" required>
+                        </div>
+                        <div class="input-group">
+                            <input type="password" id="passwordInput" placeholder="Password" required>
+                        </div>
+                        <div class="auth-form-actions">
+                            <button class="btn btn-primary" id="signInBtn">Sign In</button>
+                            <button class="btn btn-text" id="signUpBtn">Create Account</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- List Selection Screen -->
+        <div id="listScreen" class="screen hidden">
+            <div class="list-header">
+                <h2>Your Wishlists</h2>
+                <button class="btn btn-primary" id="createListBtn">
+                    <span class="material-icons">add</span>
+                    Create New List
+                </button>
+            </div>
+            <div id="listsContainer" class="lists-container">
+                <!-- Lists will be populated here -->
+            </div>
+        </div>
+
+        <!-- Wishlist View Screen -->
+        <div id="wishlistScreen" class="screen hidden">
+            <div class="wishlist-header">
+                <div class="wishlist-info">
+                    <h2 id="listTitle">Loading...</h2>
+                    <p id="listEventDate"></p>
+                    <div class="list-controls">
+                        <label class="switch">
+                            <input type="checkbox" id="showBoughtToggle">
+                            <span class="slider"></span>
+                            <span class="switch-label">Show bought items</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="wishlist-actions">
+                    <button class="btn btn-primary" id="addItemBtn">
+                        <span class="material-icons">add</span>
+                        Add Item
+                    </button>
+                    <button class="btn btn-secondary" id="manageListBtn">
+                        <span class="material-icons">edit</span>
+                        Manage List
+                    </button>
+                </div>
+            </div>
+            
+            <div id="itemsContainer" class="items-container">
+                <!-- Items will be populated here -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Modals -->
+    
+    <!-- Add/Edit Item Modal -->
+    <div id="itemModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="itemModalTitle">Add Item</h3>
+                <button class="icon-button modal-close">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="itemForm">
+                    <div class="input-group">
+                        <label for="itemName">Item Name *</label>
+                        <input type="text" id="itemName" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="itemURL">URL</label>
+                        <input type="url" id="itemURL" placeholder="https://...">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="itemDescription">Description</label>
+                        <textarea id="itemDescription" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="itemImageURL">Image URL</label>
+                        <input type="url" id="itemImageURL" placeholder="https://...">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="itemNotes">Notes (Markdown supported)</label>
+                        <textarea id="itemNotes" rows="4" placeholder="Additional notes with [markdown](https://example.com) support"></textarea>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="itemPrice">Price</label>
+                        <input type="number" id="itemPrice" step="0.01" min="0">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="itemPosition">Position</label>
+                        <input type="number" id="itemPosition" min="1">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-text" id="cancelItemBtn">Cancel</button>
+                <button class="btn btn-primary" id="saveItemBtn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Share Modal -->
+    <div id="shareModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Share List</h3>
+                <button class="icon-button modal-close">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="share-options">
+                    <div class="share-option">
+                        <h4>Share as Viewer</h4>
+                        <p>View-only access to the list</p>
+                        <div class="share-actions">
+                            <button class="btn btn-secondary" id="copyViewerLink">
+                                <span class="material-icons">link</span>
+                                Copy Link
+                            </button>
+                            <button class="btn btn-secondary" id="qrViewerCode">
+                                <span class="material-icons">qr_code</span>
+                                QR Code
+                            </button>
+                            <button class="btn btn-secondary" id="emailViewerLink">
+                                <span class="material-icons">email</span>
+                                Email
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="share-option">
+                        <h4>Share as Collaborator</h4>
+                        <p>Edit access to the list</p>
+                        <div class="share-actions">
+                            <button class="btn btn-secondary" id="copyCollabLink">
+                                <span class="material-icons">link</span>
+                                Copy Link
+                            </button>
+                            <button class="btn btn-secondary" id="qrCollabCode">
+                                <span class="material-icons">qr_code</span>
+                                QR Code
+                            </button>
+                            <button class="btn btn-secondary" id="emailCollabLink">
+                                <span class="material-icons">email</span>
+                                Email
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="qrCodeContainer" class="qr-container hidden">
+                    <canvas id="qrCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Settings</h3>
+                <button class="icon-button modal-close">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h4>Gemini AI Integration</h4>
+                    <div class="input-group">
+                        <label for="geminiApiKey">Gemini API Key</label>
+                        <input type="password" id="geminiApiKey" placeholder="Enter your Gemini API key">
+                        <small>Used for auto-summarizing web pages into list items</small>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-text" id="cancelSettingsBtn">Cancel</button>
+                <button class="btn btn-primary" id="saveSettingsBtn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>How to Use Wisher</h3>
+                <button class="icon-button modal-close">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="help-content">
+                    <h4>Getting Started</h4>
+                    <ol>
+                        <li>Sign in with Google or create an account</li>
+                        <li>Create a new wishlist or access shared ones</li>
+                        <li>Add items with descriptions, links, and images</li>
+                        <li>Share your list with friends and family</li>
+                    </ol>
+                    
+                    <h4>Features</h4>
+                    <ul>
+                        <li><strong>Drag & Drop:</strong> Reorder items by dragging them</li>
+                        <li><strong>Quick Jump:</strong> Enter a number to jump to that position</li>
+                        <li><strong>Markdown Notes:</strong> Use markdown formatting in notes</li>
+                        <li><strong>Share Options:</strong> Share as viewer or collaborator</li>
+                        <li><strong>Bought Items:</strong> Mark items as purchased with buyer info</li>
+                        <li><strong>Comments:</strong> Add comments to items (viewers only)</li>
+                    </ul>
+                    
+                    <h4>Sharing</h4>
+                    <p>Use the share button to generate links, QR codes, or email invitations. Choose between viewer access (read-only) or collaborator access (can edit).</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Modal -->
+    <div id="infoModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Item Information</h3>
+                <button class="icon-button modal-close">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="infoModalContent" class="info-content">
+                    <!-- Item details will be populated here -->
+                    <div class="item-image-container">
+                        <img id="infoItemImage" class="info-item-image" src="" alt="Item image">
+                    </div>
+                    <h4 id="infoItemName" class="info-item-name"></h4>
+                    <p id="infoItemDescription" class="info-item-description"></p>
+                    <div id="infoItemPrice" class="info-item-price"></div>
+                    <div id="infoItemNotes" class="info-item-notes"></div>
+                    <div class="info-item-actions">
+                        <a id="infoItemLink" class="btn btn-primary" href="" target="_blank">
+                            <span class="material-icons">open_in_new</span>
+                            Visit Website
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit List</h3>
+                <button class="icon-button modal-close">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="editListForm">
+                    <div class="input-group">
+                        <label for="editListName">List Name *</label>
+                        <input type="text" id="editListName" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="editListDescription">Description</label>
+                        <textarea id="editListDescription" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="editListEventDate">Event Date</label>
+                        <input type="date" id="editListEventDate">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="editListPublic">Privacy</label>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="editListPublic">
+                            <label for="editListPublic">Make this list public</label>
+                        </div>
+                        <small>Public lists can be viewed by anyone with the link</small>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Collaborators</label>
+                        <div id="collaboratorsList" class="collaborators-list">
+                            <!-- Collaborators will be listed here -->
+                        </div>
+                        <div class="add-collaborator">
+                            <input type="email" id="newCollaboratorEmail" placeholder="Enter email address">
+                            <button type="button" class="btn btn-secondary" id="addCollaboratorBtn">
+                                <span class="material-icons">add</span>
+                                Add
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Viewers</label>
+                        <div id="viewersList" class="viewers-list">
+                            <!-- Viewers will be listed here -->
+                        </div>
+                        <div class="add-viewer">
+                            <input type="email" id="newViewerEmail" placeholder="Enter email address">
+                            <button type="button" class="btn btn-secondary" id="addViewerBtn">
+                                <span class="material-icons">add</span>
+                                Add
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-text" id="cancelEditBtn">Cancel</button>
+                <button class="btn btn-primary" id="saveEditBtn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="loading-spinner hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="firebase-config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
