@@ -11,15 +11,27 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-firebase.initializeApp(firebaseConfig);
+try {
+  firebase.initializeApp(firebaseConfig);
+  console.log('Firebase initialized successfully');
+} catch (error) {
+  console.error('Firebase initialization error:', error);
+}
 
 // Initialize Firebase services
-const auth = firebase.auth();
-const db = firebase.firestore();
+let auth, db;
+try {
+  auth = firebase.auth();
+  console.log('Firebase Auth initialized successfully');
+  db = firebase.firestore();
+  console.log('Firebase Firestore initialized successfully');
+} catch (error) {
+  console.error('Firebase services initialization error:', error);
+}
 
 // Configure Firestore settings
 db.settings({
-  timestampsInSnapshots: true
+  // timestampsInSnapshots: true is deprecated and no longer needed
 });
 
 // Auth providers

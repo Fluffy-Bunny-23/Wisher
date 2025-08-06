@@ -25,49 +25,109 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeApp() {
-    // Check for list ID in URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const listId = urlParams.get('list');
-    const itemId = urlParams.get('item');
-    
-    if (listId) {
-        currentListId = listId;
-        // Store in localStorage for quick access
-        localStorage.setItem('lastViewedList', listId);
+    console.log('Initializing app');
+    try {
+        // Check for list ID in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const listId = urlParams.get('list');
+        const itemId = urlParams.get('item');
+        
+        if (listId) {
+            console.log('List ID found in URL:', listId);
+            currentListId = listId;
+            // Store in localStorage for quick access
+            localStorage.setItem('lastViewedList', listId);
+        }
+        
+        // Load settings
+        const savedApiKey = localStorage.getItem('geminiApiKey');
+        if (savedApiKey) {
+            geminiApiKey = savedApiKey;
+            const apiKeyInput = document.getElementById('geminiApiKey');
+            if (apiKeyInput) {
+                apiKeyInput.value = savedApiKey;
+            } else {
+                console.error('Element not found: geminiApiKey');
+            }
+        }
+        
+        // Ensure DOM elements are properly initialized
+        console.log('Verifying DOM elements initialization');
+        if (!authScreen) console.error('Element not found: authScreen');
+        if (!listScreen) console.error('Element not found: listScreen');
+        if (!wishlistScreen) console.error('Element not found: wishlistScreen');
+        if (!loadingSpinner) console.error('Element not found: loadingSpinner');
+        if (!sidebar) console.error('Element not found: sidebar');
+        if (!sidebarCloseBtn) console.error('Element not found: sidebarCloseBtn');
+        if (!sidebarListContainer) console.error('Element not found: sidebarListContainer');
+        if (!createListSidebarBtn) console.error('Element not found: createListSidebarBtn');
+        if (!menuButton) console.error('Element not found: menuButton');
+        if (!mainContent) console.error('Element not found: mainContent');
+        
+        console.log('App initialization completed');
+    } catch (error) {
+        console.error('Error initializing app:', error);
     }
 }
-    
-    // Load settings
-    const savedApiKey = localStorage.getItem('geminiApiKey');
-    if (savedApiKey) {
-        geminiApiKey = savedApiKey;
-        document.getElementById('geminiApiKey').value = savedApiKey;
-    }
-// This closing brace belongs to initializeApp() function
 
 
 function setupAuthStateListener() {
-    firebaseAuth.onAuthStateChanged(user => {
-        if (user) {
-            currentUser = user;
-            onUserSignedIn();
-        } else {
-            currentUser = null;
-            onUserSignedOut();
-        }
-    });
+    console.log('Setting up auth state listener');
+    
+    // Check if firebaseAuth is initialized
+    if (!firebaseAuth) {
+        console.error('Firebase Auth not initialized, cannot set up auth state listener');
+        showToast('Authentication service not available. Please refresh the page.', 'error');
+        return;
+    }
+    
+    try {
+        const unsubscribe = firebaseAuth.onAuthStateChanged(user => {
+            console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
+            if (user) {
+                console.log('User details:', user.email, user.uid);
+                currentUser = user;
+                onUserSignedIn();
+            } else {
+                console.log('No user signed in');
+                currentUser = null;
+                onUserSignedOut();
+            }
+        }, error => {
+            console.error('Auth state listener error:', error);
+            showToast('Authentication error: ' + error.message, 'error');
+        });
+        
+        console.log('Auth state listener set up successfully');
+        
+        // Store the unsubscribe function for potential cleanup
+        window.authUnsubscribe = unsubscribe;
+    } catch (error) {
+        console.error('Error setting up auth state listener:', error);
+        showToast('Failed to initialize authentication. Please refresh the page.', 'error');
+    }
 }
 
 function onUserSignedIn() {
-    hideLoading();
-    
-    if (currentListId) {
-        // Load specific list from URL
-        loadList(currentListId);
-    } else {
-        // Show user's lists
-        showScreen('listScreen');
-        loadUserLists();
+    console.log('User signed in:', currentUser);
+    try {
+        hideLoading();
+        
+        console.log('Checking for specific list ID in URL:', currentListId);
+        if (currentListId) {
+            // Load specific list from URL
+            console.log('Loading specific list:', currentListId);
+            loadList(currentListId);
+        } else {
+            // Show user's lists
+            console.log('No specific list ID, showing list screen and loading user lists');
+            showScreen('listScreen');
+            loadUserLists();
+        }
+    } catch (error) {
+        console.error('Error in onUserSignedIn:', error);
+        hideLoading();
+        showToast('Error loading application: ' + error.message, 'error');
     }
 }
 
@@ -79,78 +139,287 @@ function onUserSignedOut() {
 }
 
 function setupEventListeners() {
-    // Auth buttons
-    document.getElementById('googleSignIn').addEventListener('click', signInWithGoogle);
-    document.getElementById('emailSignIn').addEventListener('click', toggleEmailAuth);
-    document.getElementById('signInBtn').addEventListener('click', signInWithEmail);
-    document.getElementById('signUpBtn').addEventListener('click', signUpWithEmail);
-    
-    // App bar buttons
-    document.getElementById('helpBtn').addEventListener('click', () => showModal('helpModal'));
-    document.getElementById('settingsBtn').addEventListener('click', () => showModal('settingsModal'));
-    document.getElementById('shareBtn').addEventListener('click', () => showModal('shareModal'));
-    document.getElementById('userBtn').addEventListener('click', signOut);
-    
-    // List management
-    document.getElementById('createListBtn').addEventListener('click', createNewList);
-    document.getElementById('addItemBtn').addEventListener('click', () => showAddItemModal());
-    document.getElementById('manageListBtn').addEventListener('click', () => showEditModal());
+    try {
+        console.log('Setting up event listeners');
+        
+        // Auth buttons
+        const googleSignIn = document.getElementById('googleSignIn');
+        if (googleSignIn) {
+            googleSignIn.addEventListener('click', signInWithGoogle);
+        } else {
+            console.error('Element not found: googleSignIn');
+        }
+        
+        const emailSignIn = document.getElementById('emailSignIn');
+        if (emailSignIn) {
+            emailSignIn.addEventListener('click', toggleEmailAuth);
+        } else {
+            console.error('Element not found: emailSignIn');
+        }
+        
+        const signInBtn = document.getElementById('signInBtn');
+        if (signInBtn) {
+            signInBtn.addEventListener('click', signInWithEmail);
+        } else {
+            console.error('Element not found: signInBtn');
+        }
+        
+        const signUpBtn = document.getElementById('signUpBtn');
+        if (signUpBtn) {
+            signUpBtn.addEventListener('click', signUpWithEmail);
+        } else {
+            console.error('Element not found: signUpBtn');
+        }
+        
+        // App bar buttons
+        const helpBtn = document.getElementById('helpBtn');
+        if (helpBtn) {
+            helpBtn.addEventListener('click', () => showModal('helpModal'));
+        } else {
+            console.error('Element not found: helpBtn');
+        }
+        
+        const settingsBtn = document.getElementById('settingsBtn');
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', () => showModal('settingsModal'));
+        } else {
+            console.error('Element not found: settingsBtn');
+        }
+        
+        const shareBtn = document.getElementById('shareBtn');
+        if (shareBtn) {
+            shareBtn.addEventListener('click', () => showModal('shareModal'));
+        } else {
+            console.error('Element not found: shareBtn');
+        }
+        
+        const userBtn = document.getElementById('userBtn');
+        if (userBtn) {
+            userBtn.addEventListener('click', signOut);
+        } else {
+            console.error('Element not found: userBtn');
+        }
+        
+        // List management
+        const createListBtn = document.getElementById('createListBtn');
+        if (createListBtn) {
+            createListBtn.addEventListener('click', createNewList);
+        } else {
+            console.error('Element not found: createListBtn');
+        }
+        
+        const addItemBtn = document.getElementById('addItemBtn');
+        if (addItemBtn) {
+            addItemBtn.addEventListener('click', () => showAddItemModal());
+        } else {
+            console.error('Element not found: addItemBtn');
+        }
+        
+        const manageListBtn = document.getElementById('manageListBtn');
+        if (manageListBtn) {
+            manageListBtn.addEventListener('click', () => showEditModal());
+        } else {
+            console.error('Element not found: manageListBtn');
+        }
     
     // Modals
-    document.getElementById('saveItemBtn').addEventListener('click', saveItem);
-    document.getElementById('cancelItemBtn').addEventListener('click', () => hideModal('itemModal'));
-    document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
-    document.getElementById('cancelSettingsBtn').addEventListener('click', () => hideModal('settingsModal'));
-    document.getElementById('saveEditBtn').addEventListener('click', saveListEdit);
-    document.getElementById('cancelEditBtn').addEventListener('click', () => hideModal('editModal'));
-    document.getElementById('addCollaboratorBtn').addEventListener('click', addCollaborator);
-    document.getElementById('addViewerBtn').addEventListener('click', addViewer);
-    
-    // Show bought items toggle
-    document.getElementById('showBoughtToggle').addEventListener('change', toggleBoughtItems);
-    
-    // Share buttons
-    setupShareButtons();
-    
-    // Modal close buttons
-    document.querySelectorAll('.modal-close').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const modal = e.target.closest('.modal');
-            hideModal(modal.id);
-        });
-    });
-    
-    // Click outside modal to close
-    document.querySelectorAll('.modal').forEach(modal => {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                hideModal(modal.id);
-            }
-        });
-    });
-    
-    // Sidebar event listeners
-    menuButton.addEventListener('click', toggleSidebar);
-    sidebarCloseBtn.addEventListener('click', toggleSidebar);
-    createListSidebarBtn.addEventListener('click', () => {
-        toggleSidebar();
-        createNewList();
-    });
-    // Add event delegation for sidebar list items after they are loaded
-    sidebarListContainer.addEventListener('click', (e) => {
-        if (e.target.tagName === 'LI' && e.target.dataset.listId) {
-            toggleSidebar();
-            loadList(e.target.dataset.listId);
+        const saveItemBtn = document.getElementById('saveItemBtn');
+        if (saveItemBtn) {
+            saveItemBtn.addEventListener('click', saveItem);
+        } else {
+            console.error('Element not found: saveItemBtn');
         }
-    });
+        
+        const cancelItemBtn = document.getElementById('cancelItemBtn');
+        if (cancelItemBtn) {
+            cancelItemBtn.addEventListener('click', () => hideModal('itemModal'));
+        } else {
+            console.error('Element not found: cancelItemBtn');
+        }
+        
+        const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+        if (saveSettingsBtn) {
+            saveSettingsBtn.addEventListener('click', saveSettings);
+        } else {
+            console.error('Element not found: saveSettingsBtn');
+        }
+        
+        const cancelSettingsBtn = document.getElementById('cancelSettingsBtn');
+        if (cancelSettingsBtn) {
+            cancelSettingsBtn.addEventListener('click', () => hideModal('settingsModal'));
+        } else {
+            console.error('Element not found: cancelSettingsBtn');
+        }
+        
+        const saveEditBtn = document.getElementById('saveEditBtn');
+        if (saveEditBtn) {
+            saveEditBtn.addEventListener('click', saveListEdit);
+        } else {
+            console.error('Element not found: saveEditBtn');
+        }
+        
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+        if (cancelEditBtn) {
+            cancelEditBtn.addEventListener('click', () => hideModal('editModal'));
+        } else {
+            console.error('Element not found: cancelEditBtn');
+        }
+        
+        const addCollaboratorBtn = document.getElementById('addCollaboratorBtn');
+        if (addCollaboratorBtn) {
+            addCollaboratorBtn.addEventListener('click', addCollaborator);
+        } else {
+            console.error('Element not found: addCollaboratorBtn');
+        }
+        
+        const addViewerBtn = document.getElementById('addViewerBtn');
+        if (addViewerBtn) {
+            addViewerBtn.addEventListener('click', addViewer);
+        } else {
+            console.error('Element not found: addViewerBtn');
+        }
+        
+        // Show bought items toggle
+        const showBoughtToggle = document.getElementById('showBoughtToggle');
+        if (showBoughtToggle) {
+            showBoughtToggle.addEventListener('change', toggleBoughtItems);
+        } else {
+            console.error('Element not found: showBoughtToggle');
+        }
+        
+        // Share buttons
+        try {
+            setupShareButtons();
+        } catch (error) {
+            console.error('Error setting up share buttons:', error);
+        }
+        
+        // Modal close buttons
+        try {
+            const closeButtons = document.querySelectorAll('.modal-close');
+            if (closeButtons.length > 0) {
+                closeButtons.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const modal = e.target.closest('.modal');
+                        if (modal) {
+                            hideModal(modal.id);
+                        }
+                    });
+                });
+            } else {
+                console.error('No modal close buttons found');
+            }
+        } catch (error) {
+            console.error('Error setting up modal close buttons:', error);
+        }
+        
+        // Click outside modal to close
+        try {
+            const modals = document.querySelectorAll('.modal');
+            if (modals.length > 0) {
+                modals.forEach(modal => {
+                    modal.addEventListener('click', (e) => {
+                        if (e.target === modal) {
+                            hideModal(modal.id);
+                        }
+                    });
+                });
+            } else {
+                console.error('No modals found');
+            }
+        } catch (error) {
+            console.error('Error setting up modal click outside:', error);
+        }
+        
+        // Sidebar event listeners
+        if (menuButton) {
+            menuButton.addEventListener('click', toggleSidebar);
+        } else {
+            console.error('Element not found: menuButton');
+        }
+        
+        if (sidebarCloseBtn) {
+            sidebarCloseBtn.addEventListener('click', toggleSidebar);
+        } else {
+            console.error('Element not found: sidebarCloseBtn');
+        }
+        
+        if (createListSidebarBtn) {
+            createListSidebarBtn.addEventListener('click', () => {
+                toggleSidebar();
+                createNewList();
+            });
+        } else {
+            console.error('Element not found: createListSidebarBtn');
+        }
+        
+        console.log('Event listeners setup completed');
+    } catch (error) {
+        console.error('Error setting up event listeners:', error);
+    }
+    // Add event delegation for sidebar list items after they are loaded
+    try {
+        if (sidebarListContainer) {
+            sidebarListContainer.addEventListener('click', (e) => {
+                try {
+                    if (e.target.tagName === 'LI' && e.target.dataset.listId) {
+                        console.log('Sidebar list item clicked, loading list:', e.target.dataset.listId);
+                        toggleSidebar();
+                        loadList(e.target.dataset.listId);
+                    }
+                } catch (error) {
+                    console.error('Error handling sidebar list item click:', error);
+                }
+            });
+        } else {
+            console.error('Element not found: sidebarListContainer');
+        }
+    } catch (error) {
+        console.error('Error setting up sidebar list container event listener:', error);
+    }
 }
 
 // Authentication functions
 async function signInWithGoogle() {
+    console.log('Starting Google sign in process');
+    
+    // Set a safety timeout to hide the loading spinner after 15 seconds
+    // in case the auth state change event doesn't fire
+    const safetyTimeout = setTimeout(() => {
+        console.log('Safety timeout triggered - hiding loading spinner');
+        hideLoading();
+        showToast('Sign in process timed out. Please try again.', 'error');
+    }, 15000);
+    
     try {
         showLoading();
-        await firebaseAuth.signInWithPopup(googleProvider);
+        console.log('Showing loading spinner');
+        
+        // Check if firebaseAuth is initialized
+        if (!firebaseAuth) {
+            console.error('Firebase Auth not initialized');
+            clearTimeout(safetyTimeout);
+            hideLoading();
+            showToast('Authentication service not available. Please refresh the page.', 'error');
+            return;
+        }
+        
+        // Check if googleProvider is initialized
+        if (!googleProvider) {
+            console.error('Google Auth Provider not initialized');
+            clearTimeout(safetyTimeout);
+            hideLoading();
+            showToast('Google sign-in service not available. Please refresh the page.', 'error');
+            return;
+        }
+        
+        console.log('Calling signInWithPopup with googleProvider');
+        const result = await firebaseAuth.signInWithPopup(googleProvider);
+        console.log('Sign in successful, result:', result);
+        clearTimeout(safetyTimeout);
     } catch (error) {
+        console.error('Google sign in error:', error);
+        clearTimeout(safetyTimeout);
         hideLoading();
         showToast('Error signing in with Google: ' + error.message, 'error');
     }
@@ -213,20 +482,48 @@ async function signOut() {
 
 // List management functions
 async function loadUserLists() {
-    if (!currentUser) return;
+    console.log('Loading user lists for:', currentUser);
+    if (!currentUser) {
+        console.log('No current user, returning');
+        return;
+    }
+    
+    // Set a safety timeout to hide the loading spinner after 15 seconds
+    const safetyTimeout = setTimeout(() => {
+        console.log('Safety timeout triggered in loadUserLists - hiding loading spinner');
+        hideLoading();
+        showToast('Loading lists timed out. Please try again.', 'error');
+    }, 15000);
     
     try {
         showLoading();
+        
+        // Check if firebaseDb is initialized
+        if (!firebaseDb) {
+            console.error('Firestore database not initialized');
+            clearTimeout(safetyTimeout);
+            hideLoading();
+            showToast('Database connection error. Please refresh the page.', 'error');
+            return;
+        }
+        
+        console.log('Querying Firestore for lists owned by:', currentUser.email);
         const listsQuery = firebaseDb.collection('lists')
             .where('owner', '==', currentUser.email);
         
         const collaboratorQuery = firebaseDb.collection('lists')
             .where('collaborators', 'array-contains', currentUser.email);
         
+        console.log('Fetching lists from Firestore...');
         const [ownedLists, collaboratorLists] = await Promise.all([
             listsQuery.get(),
             collaboratorQuery.get()
         ]);
+        
+        clearTimeout(safetyTimeout);
+        
+        console.log('Owned lists count:', ownedLists.size);
+        console.log('Collaborator lists count:', collaboratorLists.size);
         
         const allLists = [];
         ownedLists.forEach(doc => {
@@ -239,9 +536,12 @@ async function loadUserLists() {
             }
         });
         
+        console.log('Total lists to display:', allLists.length);
         displayLists(allLists);
         hideLoading();
     } catch (error) {
+        console.error('Error loading lists:', error);
+        clearTimeout(safetyTimeout);
         hideLoading();
         showToast('Error loading lists: ' + error.message, 'error');
     }
@@ -316,16 +616,37 @@ async function createNewList() {
 }
 
 async function loadList(listId) {
+    // Set a safety timeout to hide the loading spinner after 15 seconds
+    const safetyTimeout = setTimeout(() => {
+        console.log('Safety timeout triggered in loadList - hiding loading spinner');
+        hideLoading();
+        showToast('Loading list timed out. Please try again.', 'error');
+    }, 15000);
+    
     try {
         showLoading();
+        
+        // Check if firebaseDb is initialized
+        if (!firebaseDb) {
+            console.error('Firestore database not initialized in loadList');
+            clearTimeout(safetyTimeout);
+            hideLoading();
+            showToast('Database connection error. Please refresh the page.', 'error');
+            return;
+        }
+        
+        console.log('Loading list with ID:', listId);
         const listDoc = await firebaseDb.collection('lists').doc(listId).get();
         
         if (!listDoc.exists) {
+            console.log('List not found:', listId);
+            clearTimeout(safetyTimeout);
             showToast('List not found', 'error');
             showScreen('listScreen');
             return;
         }
         
+        console.log('List found, processing data');
         currentList = { id: listDoc.id, ...listDoc.data() };
         currentListId = listId;
         
@@ -335,10 +656,15 @@ async function loadList(listId) {
         window.history.replaceState({}, '', newUrl);
         
         displayList(currentList);
-        loadListItems(listId);
+        await loadListItems(listId);
         showScreen('wishlistScreen');
+        
+        clearTimeout(safetyTimeout);
         hideLoading();
+        console.log('List loaded successfully');
     } catch (error) {
+        console.error('Error loading list:', error);
+        clearTimeout(safetyTimeout);
         hideLoading();
         showToast('Error loading list: ' + error.message, 'error');
     }
@@ -359,7 +685,23 @@ function displayList(list) {
 }
 
 async function loadListItems(listId) {
+    // Set a safety timeout to hide the loading spinner after 10 seconds
+    const safetyTimeout = setTimeout(() => {
+        console.log('Safety timeout triggered in loadListItems - hiding loading spinner');
+        hideLoading();
+        showToast('Loading items timed out. Please try again.', 'error');
+    }, 10000);
+    
     try {
+        // Check if firebaseDb is initialized
+        if (!firebaseDb) {
+            console.error('Firestore database not initialized in loadListItems');
+            clearTimeout(safetyTimeout);
+            showToast('Database connection error. Please refresh the page.', 'error');
+            return;
+        }
+        
+        console.log('Loading items for list:', listId);
         const itemsQuery = firebaseDb.collection('lists').doc(listId)
             .collection('items').orderBy('position', 'asc');
         
@@ -370,9 +712,13 @@ async function loadListItems(listId) {
             items.push({ id: doc.id, ...doc.data() });
         });
         
+        console.log(`Loaded ${items.length} items for list ${listId}`);
         displayItems(items);
         setupDragAndDrop();
+        clearTimeout(safetyTimeout);
     } catch (error) {
+        console.error('Error loading items:', error);
+        clearTimeout(safetyTimeout);
         showToast('Error loading items: ' + error.message, 'error');
     }
 }
@@ -715,12 +1061,54 @@ function saveSettings() {
 
 // Share functions
 function setupShareButtons() {
-    document.getElementById('copyViewerLink').addEventListener('click', () => copyShareLink('viewer'));
-    document.getElementById('copyCollabLink').addEventListener('click', () => copyShareLink('collaborator'));
-    document.getElementById('qrViewerCode').addEventListener('click', () => generateQRCode('viewer'));
-    document.getElementById('qrCollabCode').addEventListener('click', () => generateQRCode('collaborator'));
-    document.getElementById('emailViewerLink').addEventListener('click', () => emailShareLink('viewer'));
-    document.getElementById('emailCollabLink').addEventListener('click', () => emailShareLink('collaborator'));
+    console.log('Setting up share buttons');
+    try {
+        const copyViewerLink = document.getElementById('copyViewerLink');
+        if (copyViewerLink) {
+            copyViewerLink.addEventListener('click', () => copyShareLink('viewer'));
+        } else {
+            console.error('Element not found: copyViewerLink');
+        }
+        
+        const copyCollabLink = document.getElementById('copyCollabLink');
+        if (copyCollabLink) {
+            copyCollabLink.addEventListener('click', () => copyShareLink('collaborator'));
+        } else {
+            console.error('Element not found: copyCollabLink');
+        }
+        
+        const qrViewerCode = document.getElementById('qrViewerCode');
+        if (qrViewerCode) {
+            qrViewerCode.addEventListener('click', () => generateQRCode('viewer'));
+        } else {
+            console.error('Element not found: qrViewerCode');
+        }
+        
+        const qrCollabCode = document.getElementById('qrCollabCode');
+        if (qrCollabCode) {
+            qrCollabCode.addEventListener('click', () => generateQRCode('collaborator'));
+        } else {
+            console.error('Element not found: qrCollabCode');
+        }
+        
+        const emailViewerLink = document.getElementById('emailViewerLink');
+        if (emailViewerLink) {
+            emailViewerLink.addEventListener('click', () => emailShareLink('viewer'));
+        } else {
+            console.error('Element not found: emailViewerLink');
+        }
+        
+        const emailCollabLink = document.getElementById('emailCollabLink');
+        if (emailCollabLink) {
+            emailCollabLink.addEventListener('click', () => emailShareLink('collaborator'));
+        } else {
+            console.error('Element not found: emailCollabLink');
+        }
+        
+        console.log('Share buttons setup completed');
+    } catch (error) {
+        console.error('Error setting up share buttons:', error);
+    }
 }
 
 // Info Modal functions
@@ -916,31 +1304,128 @@ function saveListEdit() {
 }
 
 function copyShareLink(type) {
-    const url = generateShareUrl(type);
-    copyToClipboard(url);
+    try {
+        if (!currentListId) {
+            console.error('Cannot generate share link: No list is currently loaded');
+            showToast('Cannot share: No list is currently loaded', 'error');
+            return;
+        }
+        
+        const url = generateShareUrl(type);
+        copyToClipboard(url);
+        console.log(`Share link generated for type: ${type}`);
+    } catch (error) {
+        console.error('Error generating share link:', error);
+        showToast('Error generating share link', 'error');
+    }
 }
 
 function copyToClipboard(text) {
-    navigator.clipboard.writeText(text)
-        .then(() => {
+    try {
+        if (!text) {
+            console.error('No text provided to copy to clipboard');
+            showToast('Nothing to copy', 'error');
+            return;
+        }
+        
+        console.log('Attempting to copy text to clipboard');
+        navigator.clipboard.writeText(text)
+            .then(() => {
+                console.log('Text successfully copied to clipboard');
+                showToast('Copied to clipboard!', 'success');
+            })
+            .catch(err => {
+                console.error('Failed to copy text to clipboard:', err);
+                showToast('Failed to copy text', 'error');
+                
+                // Fallback for browsers that don't support clipboard API
+                fallbackCopyToClipboard(text);
+            });
+    } catch (error) {
+        console.error('Error in copyToClipboard function:', error);
+        showToast('Failed to copy text', 'error');
+        
+        // Try fallback method
+        fallbackCopyToClipboard(text);
+    }
+}
+
+function fallbackCopyToClipboard(text) {
+    try {
+        console.log('Using fallback clipboard copy method');
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';  // Avoid scrolling to bottom
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        if (successful) {
+            console.log('Fallback clipboard copy succeeded');
             showToast('Copied to clipboard!', 'success');
-        })
-        .catch(err => {
+        } else {
+            console.error('Fallback clipboard copy failed');
             showToast('Failed to copy text', 'error');
-        });
+        }
+    } catch (error) {
+        console.error('Error in fallback clipboard copy:', error);
+        showToast('Failed to copy text', 'error');
+    }
 }
 
 function generateShareUrl(type) {
-    const baseUrl = window.location.origin + window.location.pathname;
-    return `${baseUrl}?list=${currentListId}&role=${type}`;
+    try {
+        if (!currentListId) {
+            console.error('No list ID available for generating share URL');
+            showToast('Unable to generate share link', 'error');
+            return '';
+        }
+        
+        if (!type) {
+            console.warn('No share type specified, defaulting to viewer');
+            type = 'viewer';
+        }
+        
+        // Validate type
+        if (type !== 'viewer' && type !== 'collaborator') {
+            console.warn(`Invalid share type: ${type}, defaulting to 'viewer'`);
+            type = 'viewer';
+        }
+        
+        const baseUrl = window.location.origin + window.location.pathname;
+        const shareUrl = `${baseUrl}?list=${encodeURIComponent(currentListId)}&role=${encodeURIComponent(type)}`;
+        
+        console.log(`Generated share URL for ${type} role`);
+        return shareUrl;
+    } catch (error) {
+        console.error('Error generating share URL:', error);
+        showToast('Unable to generate share link', 'error');
+        return ''; // Return empty string instead of re-throwing
+    }
 }
 
 function generateQRCode(type) {
-    const url = generateShareUrl(type);
-    const canvas = document.getElementById('qrCanvas');
-    const container = document.getElementById('qrCodeContainer');
-    
     try {
+        if (!currentListId || !currentList) {
+            console.error('Cannot generate QR code: No list is currently loaded');
+            showToast('Cannot generate QR code: No list is currently loaded', 'error');
+            return;
+        }
+        
+        const url = generateShareUrl(type);
+        if (!url) {
+            console.error('Failed to generate share URL for QR code');
+            showToast('Error generating QR code', 'error');
+            return;
+        }
+        
+        const canvas = document.getElementById('qrCanvas');
+        const container = document.getElementById('qrCodeContainer');
+        
         // Check if QRCode library is available
         if (typeof QRCode !== 'undefined') {
             try {
@@ -953,6 +1438,7 @@ function generateQRCode(type) {
                      correctLevel : QRCode.CorrectLevel.H
                  });
                  container.classList.remove('hidden');
+                 console.log(`QR code generated for type: ${type}`);
              } catch (error) {
                  console.error("Error generating QR code:", error);
                  showFallbackQRCode(url, container, canvas);
@@ -962,41 +1448,72 @@ function generateQRCode(type) {
         }
     } catch (error) {
         console.error('QR Code generation error:', error);
-        showFallbackQRCode(url, container, canvas);
+        showToast('Error generating QR code', 'error');
     }
 }
 
 function showFallbackQRCode(url, container, canvas) {
-    // Hide the canvas
-    canvas.style.display = 'none';
-    
-    // Create a fallback element if it doesn't exist
-    let fallbackElement = document.getElementById('qrFallback');
-    if (!fallbackElement) {
-        fallbackElement = document.createElement('div');
-        fallbackElement.id = 'qrFallback';
-        fallbackElement.className = 'qr-fallback';
-        container.appendChild(fallbackElement);
+    try {
+        console.log('Using fallback QR code display');
+        
+        // Validate inputs
+        if (!url) {
+            console.error('No URL provided for fallback QR code');
+            return;
+        }
+        
+        if (!container || !canvas) {
+            console.error('Missing container or canvas element for fallback QR code');
+            return;
+        }
+        
+        // Hide the canvas
+        canvas.style.display = 'none';
+        
+        // Create a fallback element if it doesn't exist
+        let fallbackElement = document.getElementById('qrFallback');
+        if (!fallbackElement) {
+            fallbackElement = document.createElement('div');
+            fallbackElement.id = 'qrFallback';
+            fallbackElement.className = 'qr-fallback';
+            container.appendChild(fallbackElement);
+        }
+        
+        // Show the URL as text
+        fallbackElement.innerHTML = `
+            <p>QR Code generation is unavailable.</p>
+            <p>Share this URL instead:</p>
+            <div class="share-url">${escapeHtml(url)}</div>
+            <button class="btn btn-primary" onclick="copyToClipboard('${url.replace(/'/g, "\\'")}')">Copy URL</button>
+        `;
+        
+        // Show the container
+        container.classList.remove('hidden');
+        console.log('Fallback QR code display completed');
+    } catch (error) {
+        console.error('Error showing fallback QR code:', error);
+        showToast('Error displaying share information', 'error');
     }
-    
-    // Show the URL as text
-    fallbackElement.innerHTML = `
-        <p>QR Code generation is unavailable.</p>
-        <p>Share this URL instead:</p>
-        <div class="share-url">${url}</div>
-        <button class="btn btn-primary" onclick="copyToClipboard('${url}')">Copy URL</button>
-    `;
-    
-    // Show the container
-    container.classList.remove('hidden');
 }
 
 function emailShareLink(type) {
-    const url = generateShareUrl(type);
-    const subject = encodeURIComponent(`Check out this wishlist: ${currentList.name}`);
-    const body = encodeURIComponent(`I'd like to share this wishlist with you:\n\n${url}`);
-    
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    try {
+        if (!currentListId || !currentList) {
+            console.error('Cannot generate email share link: No list is currently loaded');
+            showToast('Cannot share: No list is currently loaded', 'error');
+            return;
+        }
+        
+        const url = generateShareUrl(type);
+        const subject = encodeURIComponent(`Check out this wishlist: ${currentList.name}`);
+        const body = encodeURIComponent(`I'd like to share this wishlist with you:\n\n${url}`);
+        
+        console.log(`Email share link generated for type: ${type}`);
+        window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    } catch (error) {
+        console.error('Error generating email share link:', error);
+        showToast('Error generating email share link', 'error');
+    }
 }
 
 // UI helper functions
@@ -1062,32 +1579,63 @@ function manageList() {
 
 // Utility functions
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    try {
+        if (text === null || text === undefined) {
+            console.warn('Attempted to escape null or undefined text');
+            return '';
+        }
+        
+        // Convert to string in case a non-string value is passed
+        const textStr = String(text);
+        const div = document.createElement('div');
+        div.textContent = textStr;
+        return div.innerHTML;
+    } catch (error) {
+        console.error('Error escaping HTML:', error);
+        return '';
+    }
 }
 
 function formatDate(dateObj) {
-    if (!dateObj) return 'Not available';
-    
-    // Handle Firebase Timestamp objects
-    if (dateObj.toDate && typeof dateObj.toDate === 'function') {
-        dateObj = dateObj.toDate();
-    } else if (!(dateObj instanceof Date)) {
-        // Try to convert to Date if it's not already a Date object
-        dateObj = new Date(dateObj);
+    try {
+        if (!dateObj) {
+            console.log('No date object provided to formatDate');
+            return 'Not available';
+        }
+        
+        // Handle Firebase Timestamp objects
+        if (dateObj.toDate && typeof dateObj.toDate === 'function') {
+            try {
+                dateObj = dateObj.toDate();
+            } catch (error) {
+                console.error('Error converting Firebase timestamp:', error);
+                return 'Invalid date';
+            }
+        } else if (!(dateObj instanceof Date)) {
+            // Try to convert to Date if it's not already a Date object
+            try {
+                dateObj = new Date(dateObj);
+            } catch (error) {
+                console.error('Error creating Date object:', error);
+                return 'Invalid date';
+            }
+        }
+        
+        // Check if date is valid
+        if (isNaN(dateObj.getTime())) {
+            console.warn('Invalid date object provided to formatDate');
+            return 'Invalid date';
+        }
+        
+        return dateObj.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    } catch (error) {
+        console.error('Error formatting date:', error);
+        return 'Error formatting date';
     }
-    
-    // Check if date is valid
-    if (isNaN(dateObj.getTime())) {
-        return 'Invalid date';
-    }
-    
-    return dateObj.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
 }
 
 // Handle URL fragments for jumping to specific items
@@ -1114,22 +1662,43 @@ function jumpToItem(itemNumber) {
 
 // Handle native sharing on mobile devices
 function handleNativeShare(type) {
-    const url = generateShareUrl(type);
-    const shareData = {
-        title: `Wishlist: ${currentList.name}`,
-        text: `Check out this wishlist!`,
-        url: url
-    };
-    
-    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-        navigator.share(shareData).catch(err => {
-            console.log('Error sharing:', err);
+    try {
+        if (!currentListId || !currentList) {
+            console.error('Cannot share: No list is currently loaded');
+            showToast('Cannot share: No list is currently loaded', 'error');
+            return;
+        }
+        
+        const url = generateShareUrl(type);
+        const shareData = {
+            title: `Wishlist: ${currentList.name}`,
+            text: `Check out this wishlist!`,
+            url: url
+        };
+        
+        console.log(`Attempting native share for type: ${type}`);
+        
+        if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+            navigator.share(shareData).catch(err => {
+                console.error('Error sharing:', err);
+                showToast('Error sharing. Copying link instead.', 'warning');
+                // Fallback to copy link
+                copyShareLink(type);
+            });
+        } else {
+            console.log('Native sharing not supported, falling back to copy link');
             // Fallback to copy link
             copyShareLink(type);
-        });
-    } else {
-        // Fallback to copy link
-        copyShareLink(type);
+        }
+    } catch (error) {
+        console.error('Error in native share:', error);
+        showToast('Error sharing. Copying link instead.', 'warning');
+        try {
+            copyShareLink(type);
+        } catch (fallbackError) {
+            console.error('Error in fallback share method:', fallbackError);
+            showToast('Unable to share at this time', 'error');
+        }
     }
 }
 
@@ -1386,31 +1955,78 @@ function saveListEdit() {
 }
 
 function copyShareLink(type) {
-    const url = generateShareUrl(type);
-    copyToClipboard(url);
+    try {
+        if (!currentListId) {
+            console.error('Cannot generate share link: No list is currently loaded');
+            showToast('Cannot share: No list is currently loaded', 'error');
+            return;
+        }
+        
+        const url = generateShareUrl(type);
+        if (!url) {
+            console.error('Failed to generate share URL');
+            return;
+        }
+        
+        copyToClipboard(url);
+        console.log(`Share link generated for type: ${type}`);
+    } catch (error) {
+        console.error('Error generating share link:', error);
+        showToast('Error generating share link', 'error');
+    }
 }
 
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text)
-        .then(() => {
-            showToast('Copied to clipboard!', 'success');
-        })
-        .catch(err => {
-            showToast('Failed to copy text', 'error');
-        });
-}
+// copyToClipboard function is now defined globally
 
 function generateShareUrl(type) {
-    const baseUrl = window.location.origin + window.location.pathname;
-    return `${baseUrl}?list=${currentListId}&role=${type}`;
+    try {
+        if (!currentListId) {
+            console.error('No list ID available for generating share URL');
+            showToast('Unable to generate share link', 'error');
+            return '';
+        }
+        
+        if (!type) {
+            console.warn('No share type specified, defaulting to viewer');
+            type = 'viewer';
+        }
+        
+        // Validate type
+        if (type !== 'viewer' && type !== 'collaborator') {
+            console.warn(`Invalid share type: ${type}, defaulting to 'viewer'`);
+            type = 'viewer';
+        }
+        
+        const baseUrl = window.location.origin + window.location.pathname;
+        const shareUrl = `${baseUrl}?list=${encodeURIComponent(currentListId)}&role=${encodeURIComponent(type)}`;
+        
+        console.log(`Generated share URL for ${type} role`);
+        return shareUrl;
+    } catch (error) {
+        console.error('Error generating share URL:', error);
+        showToast('Unable to generate share link', 'error');
+        return '';
+    }
 }
 
 function generateQRCode(type) {
-    const url = generateShareUrl(type);
-    const canvas = document.getElementById('qrCanvas');
-    const container = document.getElementById('qrCodeContainer');
-    
     try {
+        if (!currentListId || !currentList) {
+            console.error('Cannot generate QR code: No list is currently loaded');
+            showToast('Cannot generate QR code: No list is currently loaded', 'error');
+            return;
+        }
+        
+        const url = generateShareUrl(type);
+        if (!url) {
+            console.error('Failed to generate share URL for QR code');
+            showToast('Error generating QR code', 'error');
+            return;
+        }
+        
+        const canvas = document.getElementById('qrCanvas');
+        const container = document.getElementById('qrCodeContainer');
+        
         // Check if QRCode library is available
         if (typeof QRCode !== 'undefined') {
             try {
@@ -1423,6 +2039,7 @@ function generateQRCode(type) {
                      correctLevel : QRCode.CorrectLevel.H
                  });
                  container.classList.remove('hidden');
+                 console.log(`QR code generated for type: ${type}`);
              } catch (error) {
                  console.error("Error generating QR code:", error);
                  showFallbackQRCode(url, container, canvas);
@@ -1432,41 +2049,78 @@ function generateQRCode(type) {
         }
     } catch (error) {
         console.error('QR Code generation error:', error);
-        showFallbackQRCode(url, container, canvas);
+        showToast('Error generating QR code', 'error');
     }
 }
 
 function showFallbackQRCode(url, container, canvas) {
-    // Hide the canvas
-    canvas.style.display = 'none';
-    
-    // Create a fallback element if it doesn't exist
-    let fallbackElement = document.getElementById('qrFallback');
-    if (!fallbackElement) {
-        fallbackElement = document.createElement('div');
-        fallbackElement.id = 'qrFallback';
-        fallbackElement.className = 'qr-fallback';
-        container.appendChild(fallbackElement);
+    try {
+        console.log('Using fallback QR code display');
+        
+        // Validate inputs
+        if (!url) {
+            console.error('No URL provided for fallback QR code');
+            return;
+        }
+        
+        if (!container || !canvas) {
+            console.error('Missing container or canvas element for fallback QR code');
+            return;
+        }
+        
+        // Hide the canvas
+        canvas.style.display = 'none';
+        
+        // Create a fallback element if it doesn't exist
+        let fallbackElement = document.getElementById('qrFallback');
+        if (!fallbackElement) {
+            fallbackElement = document.createElement('div');
+            fallbackElement.id = 'qrFallback';
+            fallbackElement.className = 'qr-fallback';
+            container.appendChild(fallbackElement);
+        }
+        
+        // Show the URL as text
+        fallbackElement.innerHTML = `
+            <p>QR Code generation is unavailable.</p>
+            <p>Share this URL instead:</p>
+            <div class="share-url">${escapeHtml(url)}</div>
+            <button class="btn btn-primary" onclick="copyToClipboard('${url.replace(/'/g, "\\'")}')">Copy URL</button>
+        `;
+        
+        // Show the container
+        container.classList.remove('hidden');
+        console.log('Fallback QR code display completed');
+    } catch (error) {
+        console.error('Error showing fallback QR code:', error);
+        showToast('Error displaying share information', 'error');
     }
-    
-    // Show the URL as text
-    fallbackElement.innerHTML = `
-        <p>QR Code generation is unavailable.</p>
-        <p>Share this URL instead:</p>
-        <div class="share-url">${url}</div>
-        <button class="btn btn-primary" onclick="copyToClipboard('${url}')">Copy URL</button>
-    `;
-    
-    // Show the container
-    container.classList.remove('hidden');
 }
 
 function emailShareLink(type) {
-    const url = generateShareUrl(type);
-    const subject = encodeURIComponent(`Check out this wishlist: ${currentList.name}`);
-    const body = encodeURIComponent(`I'd like to share this wishlist with you:\n\n${url}`);
-    
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    try {
+        if (!currentListId || !currentList) {
+            console.error('Cannot generate email share link: No list is currently loaded');
+            showToast('Cannot share: No list is currently loaded', 'error');
+            return;
+        }
+        
+        const url = generateShareUrl(type);
+        if (!url) {
+            console.error('Failed to generate share URL');
+            showToast('Error generating share link', 'error');
+            return;
+        }
+        
+        const subject = encodeURIComponent(`Check out this wishlist: ${currentList.name}`);
+        const body = encodeURIComponent(`I'd like to share this wishlist with you:\n\n${url}`);
+        
+        console.log(`Email share link generated for type: ${type}`);
+        window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    } catch (error) {
+        console.error('Error generating email share link:', error);
+        showToast('Error generating email share link', 'error');
+    }
 }
 
 // UI helper functions
@@ -1532,32 +2186,63 @@ function manageList() {
 
 // Utility functions
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    try {
+        if (text === null || text === undefined) {
+            console.warn('Attempted to escape null or undefined text');
+            return '';
+        }
+        
+        // Convert to string in case a non-string value is passed
+        const textStr = String(text);
+        const div = document.createElement('div');
+        div.textContent = textStr;
+        return div.innerHTML;
+    } catch (error) {
+        console.error('Error escaping HTML:', error);
+        return '';
+    }
 }
 
 function formatDate(dateObj) {
-    if (!dateObj) return 'Not available';
-    
-    // Handle Firebase Timestamp objects
-    if (dateObj.toDate && typeof dateObj.toDate === 'function') {
-        dateObj = dateObj.toDate();
-    } else if (!(dateObj instanceof Date)) {
-        // Try to convert to Date if it's not already a Date object
-        dateObj = new Date(dateObj);
+    try {
+        if (!dateObj) {
+            console.log('No date object provided to formatDate');
+            return 'Not available';
+        }
+        
+        // Handle Firebase Timestamp objects
+        if (dateObj.toDate && typeof dateObj.toDate === 'function') {
+            try {
+                dateObj = dateObj.toDate();
+            } catch (error) {
+                console.error('Error converting Firebase timestamp:', error);
+                return 'Invalid date';
+            }
+        } else if (!(dateObj instanceof Date)) {
+            // Try to convert to Date if it's not already a Date object
+            try {
+                dateObj = new Date(dateObj);
+            } catch (error) {
+                console.error('Error creating Date object:', error);
+                return 'Invalid date';
+            }
+        }
+        
+        // Check if date is valid
+        if (isNaN(dateObj.getTime())) {
+            console.warn('Invalid date object provided to formatDate');
+            return 'Invalid date';
+        }
+        
+        return dateObj.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    } catch (error) {
+        console.error('Error formatting date:', error);
+        return 'Error formatting date';
     }
-    
-    // Check if date is valid
-    if (isNaN(dateObj.getTime())) {
-        return 'Invalid date';
-    }
-    
-    return dateObj.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
 }
 
 // Handle URL fragments for jumping to specific items
@@ -1584,22 +2269,43 @@ function jumpToItem(itemNumber) {
 
 // Handle native sharing on mobile devices
 function handleNativeShare(type) {
-    const url = generateShareUrl(type);
-    const shareData = {
-        title: `Wishlist: ${currentList.name}`,
-        text: `Check out this wishlist!`,
-        url: url
-    };
-    
-    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-        navigator.share(shareData).catch(err => {
-            console.log('Error sharing:', err);
+    try {
+        if (!currentListId || !currentList) {
+            console.error('Cannot share: No list is currently loaded');
+            showToast('Cannot share: No list is currently loaded', 'error');
+            return;
+        }
+        
+        const url = generateShareUrl(type);
+        const shareData = {
+            title: `Wishlist: ${currentList.name}`,
+            text: `Check out this wishlist!`,
+            url: url
+        };
+        
+        console.log(`Attempting native share for type: ${type}`);
+        
+        if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+            navigator.share(shareData).catch(err => {
+                console.error('Error sharing:', err);
+                showToast('Error sharing. Copying link instead.', 'warning');
+                // Fallback to copy link
+                copyShareLink(type);
+            });
+        } else {
+            console.log('Native sharing not supported, falling back to copy link');
             // Fallback to copy link
             copyShareLink(type);
-        });
-    } else {
-        // Fallback to copy link
-        copyShareLink(type);
+        }
+    } catch (error) {
+        console.error('Error in native share:', error);
+        showToast('Error sharing. Copying link instead.', 'warning');
+        try {
+            copyShareLink(type);
+        } catch (fallbackError) {
+            console.error('Error in fallback share method:', fallbackError);
+            showToast('Unable to share at this time', 'error');
+        }
     }
 }
 
@@ -1856,31 +2562,78 @@ function saveListEdit() {
 }
 
 function copyShareLink(type) {
-    const url = generateShareUrl(type);
-    copyToClipboard(url);
+    try {
+        if (!currentListId) {
+            console.error('Cannot generate share link: No list is currently loaded');
+            showToast('Cannot share: No list is currently loaded', 'error');
+            return;
+        }
+        
+        const url = generateShareUrl(type);
+        if (!url) {
+            console.error('Failed to generate share URL');
+            return;
+        }
+        
+        copyToClipboard(url);
+        console.log(`Share link generated for type: ${type}`);
+    } catch (error) {
+        console.error('Error generating share link:', error);
+        showToast('Error generating share link', 'error');
+    }
 }
 
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text)
-        .then(() => {
-            showToast('Copied to clipboard!', 'success');
-        })
-        .catch(err => {
-            showToast('Failed to copy text', 'error');
-        });
-}
+// copyToClipboard function is now defined globally
 
 function generateShareUrl(type) {
-    const baseUrl = window.location.origin + window.location.pathname;
-    return `${baseUrl}?list=${currentListId}&role=${type}`;
+    try {
+        if (!currentListId) {
+            console.error('No list ID available for generating share URL');
+            showToast('Unable to generate share link', 'error');
+            return '';
+        }
+        
+        if (!type) {
+            console.warn('No share type specified, defaulting to viewer');
+            type = 'viewer';
+        }
+        
+        // Validate type
+        if (type !== 'viewer' && type !== 'collaborator') {
+            console.warn(`Invalid share type: ${type}, defaulting to 'viewer'`);
+            type = 'viewer';
+        }
+        
+        const baseUrl = window.location.origin + window.location.pathname;
+        const shareUrl = `${baseUrl}?list=${encodeURIComponent(currentListId)}&role=${encodeURIComponent(type)}`;
+        
+        console.log(`Generated share URL for ${type} role`);
+        return shareUrl;
+    } catch (error) {
+        console.error('Error generating share URL:', error);
+        showToast('Unable to generate share link', 'error');
+        return '';
+    }
 }
 
 function generateQRCode(type) {
-    const url = generateShareUrl(type);
-    const canvas = document.getElementById('qrCanvas');
-    const container = document.getElementById('qrCodeContainer');
-    
     try {
+        if (!currentListId || !currentList) {
+            console.error('Cannot generate QR code: No list is currently loaded');
+            showToast('Cannot generate QR code: No list is currently loaded', 'error');
+            return;
+        }
+        
+        const url = generateShareUrl(type);
+        if (!url) {
+            console.error('Failed to generate share URL for QR code');
+            showToast('Error generating QR code', 'error');
+            return;
+        }
+        
+        const canvas = document.getElementById('qrCanvas');
+        const container = document.getElementById('qrCodeContainer');
+        
         // Check if QRCode library is available
         if (typeof QRCode !== 'undefined') {
             try {
@@ -1893,6 +2646,7 @@ function generateQRCode(type) {
                      correctLevel : QRCode.CorrectLevel.H
                  });
                  container.classList.remove('hidden');
+                 console.log(`QR code generated for type: ${type}`);
              } catch (error) {
                  console.error("Error generating QR code:", error);
                  showFallbackQRCode(url, container, canvas);
@@ -1902,41 +2656,78 @@ function generateQRCode(type) {
         }
     } catch (error) {
         console.error('QR Code generation error:', error);
-        showFallbackQRCode(url, container, canvas);
+        showToast('Error generating QR code', 'error');
     }
 }
 
 function showFallbackQRCode(url, container, canvas) {
-    // Hide the canvas
-    canvas.style.display = 'none';
-    
-    // Create a fallback element if it doesn't exist
-    let fallbackElement = document.getElementById('qrFallback');
-    if (!fallbackElement) {
-        fallbackElement = document.createElement('div');
-        fallbackElement.id = 'qrFallback';
-        fallbackElement.className = 'qr-fallback';
-        container.appendChild(fallbackElement);
+    try {
+        console.log('Using fallback QR code display');
+        
+        // Validate inputs
+        if (!url) {
+            console.error('No URL provided for fallback QR code');
+            return;
+        }
+        
+        if (!container || !canvas) {
+            console.error('Missing container or canvas element for fallback QR code');
+            return;
+        }
+        
+        // Hide the canvas
+        canvas.style.display = 'none';
+        
+        // Create a fallback element if it doesn't exist
+        let fallbackElement = document.getElementById('qrFallback');
+        if (!fallbackElement) {
+            fallbackElement = document.createElement('div');
+            fallbackElement.id = 'qrFallback';
+            fallbackElement.className = 'qr-fallback';
+            container.appendChild(fallbackElement);
+        }
+        
+        // Show the URL as text
+        fallbackElement.innerHTML = `
+            <p>QR Code generation is unavailable.</p>
+            <p>Share this URL instead:</p>
+            <div class="share-url">${escapeHtml(url)}</div>
+            <button class="btn btn-primary" onclick="copyToClipboard('${url.replace(/'/g, "\\'")}')">Copy URL</button>
+        `;
+        
+        // Show the container
+        container.classList.remove('hidden');
+        console.log('Fallback QR code display completed');
+    } catch (error) {
+        console.error('Error showing fallback QR code:', error);
+        showToast('Error displaying share information', 'error');
     }
-    
-    // Show the URL as text
-    fallbackElement.innerHTML = `
-        <p>QR Code generation is unavailable.</p>
-        <p>Share this URL instead:</p>
-        <div class="share-url">${url}</div>
-        <button class="btn btn-primary" onclick="copyToClipboard('${url}')">Copy URL</button>
-    `;
-    
-    // Show the container
-    container.classList.remove('hidden');
 }
 
 function emailShareLink(type) {
-    const url = generateShareUrl(type);
-    const subject = encodeURIComponent(`Check out this wishlist: ${currentList.name}`);
-    const body = encodeURIComponent(`I'd like to share this wishlist with you:\n\n${url}`);
-    
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    try {
+        if (!currentListId || !currentList) {
+            console.error('Cannot generate email share link: No list is currently loaded');
+            showToast('Cannot share: No list is currently loaded', 'error');
+            return;
+        }
+        
+        const url = generateShareUrl(type);
+        if (!url) {
+            console.error('Failed to generate share URL');
+            showToast('Error generating share link', 'error');
+            return;
+        }
+        
+        const subject = encodeURIComponent(`Check out this wishlist: ${currentList.name}`);
+        const body = encodeURIComponent(`I'd like to share this wishlist with you:\n\n${url}`);
+        
+        console.log(`Email share link generated for type: ${type}`);
+        window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    } catch (error) {
+        console.error('Error generating email share link:', error);
+        showToast('Error generating email share link', 'error');
+    }
 }
 
 // UI helper functions
@@ -2002,32 +2793,63 @@ function manageList() {
 
 // Utility functions
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    try {
+        if (text === null || text === undefined) {
+            console.warn('Attempted to escape null or undefined text');
+            return '';
+        }
+        
+        // Convert to string in case a non-string value is passed
+        const textStr = String(text);
+        const div = document.createElement('div');
+        div.textContent = textStr;
+        return div.innerHTML;
+    } catch (error) {
+        console.error('Error escaping HTML:', error);
+        return '';
+    }
 }
 
 function formatDate(dateObj) {
-    if (!dateObj) return 'Not available';
-    
-    // Handle Firebase Timestamp objects
-    if (dateObj.toDate && typeof dateObj.toDate === 'function') {
-        dateObj = dateObj.toDate();
-    } else if (!(dateObj instanceof Date)) {
-        // Try to convert to Date if it's not already a Date object
-        dateObj = new Date(dateObj);
+    try {
+        if (!dateObj) {
+            console.log('No date object provided to formatDate');
+            return 'Not available';
+        }
+        
+        // Handle Firebase Timestamp objects
+        if (dateObj.toDate && typeof dateObj.toDate === 'function') {
+            try {
+                dateObj = dateObj.toDate();
+            } catch (error) {
+                console.error('Error converting Firebase timestamp:', error);
+                return 'Invalid date';
+            }
+        } else if (!(dateObj instanceof Date)) {
+            // Try to convert to Date if it's not already a Date object
+            try {
+                dateObj = new Date(dateObj);
+            } catch (error) {
+                console.error('Error creating Date object:', error);
+                return 'Invalid date';
+            }
+        }
+        
+        // Check if date is valid
+        if (isNaN(dateObj.getTime())) {
+            console.warn('Invalid date object provided to formatDate');
+            return 'Invalid date';
+        }
+        
+        return dateObj.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    } catch (error) {
+        console.error('Error formatting date:', error);
+        return 'Error formatting date';
     }
-    
-    // Check if date is valid
-    if (isNaN(dateObj.getTime())) {
-        return 'Invalid date';
-    }
-    
-    return dateObj.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
 }
 
 // Handle URL fragments for jumping to specific items
@@ -2054,22 +2876,43 @@ function jumpToItem(itemNumber) {
 
 // Handle native sharing on mobile devices
 function handleNativeShare(type) {
-    const url = generateShareUrl(type);
-    const shareData = {
-        title: `Wishlist: ${currentList.name}`,
-        text: `Check out this wishlist!`,
-        url: url
-    };
-    
-    if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
-        navigator.share(shareData).catch(err => {
-            console.log('Error sharing:', err);
+    try {
+        if (!currentListId || !currentList) {
+            console.error('Cannot share: No list is currently loaded');
+            showToast('Cannot share: No list is currently loaded', 'error');
+            return;
+        }
+        
+        const url = generateShareUrl(type);
+        const shareData = {
+            title: `Wishlist: ${currentList.name}`,
+            text: `Check out this wishlist!`,
+            url: url
+        };
+        
+        console.log(`Attempting native share for type: ${type}`);
+        
+        if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+            navigator.share(shareData).catch(err => {
+                console.error('Error sharing:', err);
+                showToast('Error sharing. Copying link instead.', 'warning');
+                // Fallback to copy link
+                copyShareLink(type);
+            });
+        } else {
+            console.log('Native sharing not supported, falling back to copy link');
             // Fallback to copy link
             copyShareLink(type);
-        });
-    } else {
-        // Fallback to copy link
-        copyShareLink(type);
+        }
+    } catch (error) {
+        console.error('Error in native share:', error);
+        showToast('Error sharing. Copying link instead.', 'warning');
+        try {
+            copyShareLink(type);
+        } catch (fallbackError) {
+            console.error('Error in fallback share method:', fallbackError);
+            showToast('Unable to share at this time', 'error');
+        }
     }
 }
 
