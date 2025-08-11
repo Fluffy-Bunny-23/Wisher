@@ -448,12 +448,33 @@ input:checked + .slider:before {
   border-radius: var(--border-radius-large);
   box-shadow: var(--shadow-1);
   padding: 20px;
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow 0.2s ease, background-color 0.2s ease;
   position: relative;
+  display: flex;
 }
 
 .item-card:hover {
   box-shadow: var(--shadow-2);
+}
+
+.item-card.selected {
+  background-color: var(--primary-light);
+  box-shadow: var(--shadow-2);
+}
+
+.item-checkbox {
+  margin-right: 15px;
+  align-self: center;
+}
+
+.item-checkbox input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.item-content-wrapper {
+  flex: 1;
 }
 
 .item-card.bought {
@@ -916,6 +937,47 @@ input:checked + .slider:before {
 .toast.success {
   background-color: #4CAF50;
   color: white;
+}
+
+/* Selection Action Bar */
+.selection-action-bar {
+  position: sticky;
+  top: 64px;
+  z-index: 100;
+  background-color: var(--primary-color);
+  color: var(--on-primary);
+  padding: 12px 20px;
+  border-radius: var(--border-radius);
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: var(--shadow-2);
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.selection-action-bar.hidden {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.selection-info {
+  font-weight: 500;
+}
+
+.selection-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-error {
+  background-color: var(--error-color);
+  color: white;
+}
+
+.btn-error:hover {
+  background-color: #d32f2f;
 }
 
 /* Utility Classes */

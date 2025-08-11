@@ -1,9 +1,12 @@
+console.log("JS is running")
 // Global state
 let currentUser = null;
 let currentList = null;
 let currentListId = null;
 let showBoughtItems = false;
 let geminiApiKey = localStorage.getItem('geminiApiKey') || '';
+let selectedItems = [];
+let lastSelectedItemId = null;
 
 // DOM elements
 const authScreen = document.getElementById('authScreen');
@@ -181,7 +184,10 @@ function setupEventListeners() {
         
         const settingsBtn = document.getElementById('settingsBtn');
         if (settingsBtn) {
-            settingsBtn.addEventListener('click', () => showModal('settingsModal'));
+            settingsBtn.addEventListener('click', () => {
+                loadSettings(); // Load settings when modal is opened
+                showModal('settingsModal');
+            });
         } else {
             console.error('Element not found: settingsBtn');
         }
@@ -220,6 +226,13 @@ function setupEventListeners() {
             manageListBtn.addEventListener('click', () => showEditModal());
         } else {
             console.error('Element not found: manageListBtn');
+        }
+
+        const importListBtn = document.getElementById('importListBtn');
+        if (importListBtn) {
+            importListBtn.addEventListener('click', importList);
+        } else {
+            console.error('Element not found: importListBtn');
         }
     
     // Modals
@@ -672,8 +685,17 @@ async function loadList(listId) {
 
 function displayList(list) {
     document.getElementById('listTitle').textContent = list.name;
-    document.getElementById('listEventDate').textContent = 
-        list.eventDate ? `Event: ${formatDate(list.eventDate)}` : '';
+    document.getElementById('listEventDate').textContent = list.eventDate ? `Event: ${formatDate(list.eventDate)}` : '';
+
+        // Show/hide import button based on ownership
+        const importListBtn = document.getElementById('importListBtn');
+        if (importListBtn) {
+            if (currentUser && list.owner === currentUser.email) {
+                importListBtn.style.display = 'block';
+            } else {
+                importListBtn.style.display = 'none';
+            }
+        }
     
     // Set up permissions
     const isOwner = currentUser && currentUser.email === list.owner;
@@ -727,6 +749,11 @@ function displayItems(items) {
     const container = document.getElementById('itemsContainer');
     container.innerHTML = '';
     
+    // Reset selected items when redisplaying
+    selectedItems = [];
+    lastSelectedItemId = null;
+    updateSelectionActionBar();
+    
     if (items.length === 0) {
         container.innerHTML = `
             <div class="text-center">
@@ -735,6 +762,31 @@ function displayItems(items) {
         `;
         return;
     }
+    
+    // Create selection action bar
+    const selectionActionBar = document.createElement('div');
+    selectionActionBar.id = 'selectionActionBar';
+    selectionActionBar.className = 'selection-action-bar hidden';
+    selectionActionBar.innerHTML = `
+        <div class="selection-info">
+            <span id="selectedItemsCount">0</span> items selected
+        </div>
+        <div class="selection-actions">
+            <button class="btn btn-secondary" id="deselectAllBtn">
+                <span class="material-icons">deselect</span>
+                Deselect All
+            </button>
+            <button class="btn btn-error" id="deleteSelectedBtn">
+                <span class="material-icons">delete</span>
+                Delete Selected
+            </button>
+        </div>
+    `;
+    container.appendChild(selectionActionBar);
+    
+    // Add event listeners for action bar buttons
+    document.getElementById('deselectAllBtn').addEventListener('click', deselectAllItems);
+    document.getElementById('deleteSelectedBtn').addEventListener('click', deleteSelectedItems);
     
     items.forEach((item, index) => {
         if (!showBoughtItems && item.bought) return;
@@ -746,22 +798,42 @@ function displayItems(items) {
 
 function createItemCard(item, position) {
     const card = document.createElement('div');
-    card.className = `item-card ${item.bought ? 'bought' : ''}`;
+    card.className = `item-card ${item.bought ? 'bought' : ''} ${selectedItems.includes(item.id) ? 'selected' : ''}`;
     card.dataset.itemId = item.id;
     
     const isOwner = currentUser && currentUser.email === currentList.owner;
     const isCollaborator = currentUser && currentList.collaborators.includes(currentUser.email);
     const canEdit = isOwner || isCollaborator;
     
-    // Add click event listener to show info modal when card is clicked
-    card.addEventListener('click', (e) => {
+    // Create checkbox for multi-select
+    const checkbox = document.createElement('div');
+    checkbox.className = 'item-checkbox';
+    checkbox.innerHTML = `<input type="checkbox" ${selectedItems.includes(item.id) ? 'checked' : ''} />`;
+    
+    // Add checkbox click handler with support for Ctrl and Shift selection
+    const checkboxInput = checkbox.querySelector('input');
+    checkboxInput.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleItemSelection(item.id, e.ctrlKey, e.shiftKey);
+    });
+    
+    // Create content wrapper
+    const contentWrapper = document.createElement('div');
+    contentWrapper.className = 'item-content-wrapper';
+    
+    // Add click event listener to handle selection and show info modal
+    contentWrapper.addEventListener('click', (e) => {
         // Don't trigger if clicking on a button or link
         if (!e.target.closest('button') && !e.target.closest('a')) {
-            showItemInfo(item.id);
+            if (e.ctrlKey || e.shiftKey) {
+                handleItemSelection(item.id, e.ctrlKey, e.shiftKey);
+            } else {
+                showItemInfo(item.id);
+            }
         }
     });
     
-    card.innerHTML = `
+    contentWrapper.innerHTML = `
         <div class="item-position">${position}</div>
         <div class="item-header">
             <h3 class="item-title">${escapeHtml(item.name)}</h3>
@@ -788,6 +860,9 @@ function createItemCard(item, position) {
                 ${canEdit ? `
                     <button class="icon-button drag-handle" title="Drag to reorder">
                         <span class="material-icons">drag_indicator</span>
+                    </button>
+                    <button class="icon-button" onclick="deleteItem('${item.id}', '${escapeHtml(item.name)}')" title="Delete">
+                        <span class="material-icons">delete</span>
                     </button>
                 ` : ''}
             </div>
@@ -833,7 +908,149 @@ function createItemCard(item, position) {
         ` : ''}
     `;
     
+    // Append elements to card
+    card.appendChild(checkbox);
+    card.appendChild(contentWrapper);
+    
     return card;
+}
+
+// Multi-select functionality
+function handleItemSelection(itemId, ctrlKey, shiftKey) {
+    // Get all visible item IDs in order
+    const visibleItemIds = Array.from(document.querySelectorAll('.item-card'))
+        .map(card => card.dataset.itemId);
+    
+    if (shiftKey && lastSelectedItemId) {
+        // Shift key: select range of items
+        const currentIndex = visibleItemIds.indexOf(itemId);
+        const lastIndex = visibleItemIds.indexOf(lastSelectedItemId);
+        
+        if (currentIndex !== -1 && lastIndex !== -1) {
+            const start = Math.min(currentIndex, lastIndex);
+            const end = Math.max(currentIndex, lastIndex);
+            
+            // Clear selection if not holding Ctrl key
+            if (!ctrlKey) {
+                selectedItems = [];
+            }
+            
+            // Add all items in range to selection
+            for (let i = start; i <= end; i++) {
+                if (!selectedItems.includes(visibleItemIds[i])) {
+                    selectedItems.push(visibleItemIds[i]);
+                }
+            }
+        }
+    } else if (ctrlKey) {
+        // Ctrl key: toggle selection of clicked item
+        const index = selectedItems.indexOf(itemId);
+        if (index === -1) {
+            selectedItems.push(itemId);
+        } else {
+            selectedItems.splice(index, 1);
+        }
+    } else {
+        // No modifier keys: select only this item
+        if (selectedItems.length === 1 && !selectedItems.includes(itemId)) {
+            // If exactly one item is selected and a different item is clicked, add the new item.
+            selectedItems.push(itemId);
+        } else if (selectedItems.includes(itemId) && selectedItems.length === 1) {
+            // If the single selected item is clicked again, deselect it.
+            selectedItems = [];
+        } else {
+            // Otherwise, clear selection and select only this item.
+            selectedItems = [itemId];
+        }
+    }
+    
+    // Update last selected item
+    lastSelectedItemId = itemId;
+    
+    // Update UI to reflect selection state
+    updateSelectionUI();
+    updateSelectionActionBar();
+}
+
+function updateSelectionUI() {
+    // Update all item cards to reflect selection state
+    document.querySelectorAll('.item-card').forEach(card => {
+        const itemId = card.dataset.itemId;
+        const isSelected = selectedItems.includes(itemId);
+        
+        // Update card class
+        if (isSelected) {
+            card.classList.add('selected');
+        } else {
+            card.classList.remove('selected');
+        }
+        
+        // Update checkbox
+        const checkbox = card.querySelector('input[type="checkbox"]');
+        if (checkbox) {
+            checkbox.checked = isSelected;
+        }
+    });
+}
+
+function updateSelectionActionBar() {
+    const actionBar = document.getElementById('selectionActionBar');
+    if (!actionBar) return;
+    
+    if (selectedItems.length > 0) {
+        actionBar.classList.remove('hidden');
+        document.getElementById('selectedItemsCount').textContent = selectedItems.length;
+    } else {
+        actionBar.classList.add('hidden');
+    }
+}
+
+function deselectAllItems() {
+    selectedItems = [];
+    lastSelectedItemId = null;
+    updateSelectionUI();
+    updateSelectionActionBar();
+}
+
+async function deleteSelectedItems() {
+    if (selectedItems.length === 0) return;
+    
+    const isOwner = currentUser && currentUser.email === currentList.owner;
+    const isCollaborator = currentUser && currentList.collaborators.includes(currentUser.email);
+    const canEdit = isOwner || isCollaborator;
+    
+    if (!canEdit) {
+        showToast('You don\'t have permission to delete items', 'error');
+        return;
+    }
+    
+    if (!confirm(`Are you sure you want to delete ${selectedItems.length} selected item(s)?`)) {
+        return;
+    }
+    
+    showLoading();
+    
+    try {
+        const batch = firebaseDb.batch();
+        const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+        
+        selectedItems.forEach(itemId => {
+            batch.delete(itemsRef.doc(itemId));
+        });
+        
+        await batch.commit();
+        showToast(`${selectedItems.length} item(s) deleted successfully`, 'success');
+        
+        // Clear selection and reload items
+        selectedItems = [];
+        lastSelectedItemId = null;
+        await loadListItems(currentListId); // Ensure list is reloaded before hiding loading
+        hideLoading();
+    } catch (error) {
+        console.error('Error deleting items:', error);
+        showToast('Error deleting items: ' + error.message, 'error');
+        hideLoading();
+    }
 }
 
 function setupDragAndDrop() {
@@ -852,6 +1069,7 @@ function setupDragAndDrop() {
         ghostClass: 'sortable-ghost',
         chosenClass: 'sortable-chosen',
         dragClass: 'sortable-drag',
+        filter: '.selection-action-bar', // Don't allow dragging the action bar
         onEnd: async function(evt) {
             const itemId = evt.item.dataset.itemId;
             const newPosition = evt.newIndex + 1;
@@ -878,13 +1096,12 @@ function showAddItemModal() {
 
 function editItem(itemId) {
     // Find item in current list and load it into the edit modal
-    const itemsRef = db.collection('lists').doc(currentListId).collection('items');
+    const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
     
     itemsRef.doc(itemId).get()
         .then(doc => {
             if (doc.exists) {
                 const item = doc.data();
-                
                 // Set the form to edit mode and store the item ID
                 document.getElementById('itemForm').dataset.mode = 'edit';
                 document.getElementById('itemForm').dataset.itemId = itemId;
@@ -915,7 +1132,7 @@ function editItem(itemId) {
 
 function showItemInfo(itemId) {
     // Find the item in the current list items
-    const itemsRef = db.collection('lists').doc(currentListId).collection('items');
+    const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
     itemsRef.doc(itemId).get()
         .then(doc => {
             if (doc.exists) {
@@ -1045,19 +1262,70 @@ async function updateItemPosition(itemId, newPosition) {
 
 // Settings functions
 function saveSettings() {
-    const apiKey = document.getElementById('geminiApiKey').value;
+    const geminiApiKey = document.getElementById('geminiApiKey').value;
     
-    if (apiKey) {
-        localStorage.setItem('geminiApiKey', apiKey);
-        geminiApiKey = apiKey;
+    if (geminiApiKey) {
+        localStorage.setItem('geminiApiKey', geminiApiKey);
+        window.geminiApiKey = geminiApiKey; // Make it globally accessible or pass it around
     } else {
         localStorage.removeItem('geminiApiKey');
-        geminiApiKey = '';
+        window.geminiApiKey = null;
     }
-    
     showToast('Settings saved!', 'success');
     hideModal('settingsModal');
 }
+
+// Function to load settings on app initialization
+function loadSettings() {
+    const geminiApiKey = localStorage.getItem('geminiApiKey');
+    if (geminiApiKey) {
+        document.getElementById('geminiApiKey').value = geminiApiKey;
+        window.geminiApiKey = geminiApiKey;
+    }
+}
+
+// Initialize Gemini API (placeholder for actual API call)
+async function summarizeItemName(itemName) {
+    if (!window.geminiApiKey) {
+        console.warn('Gemini API Key not set. Cannot summarize item name.');
+        return itemName; // Return original name if API key is missing
+    }
+
+    try {
+        console.log(`Summarizing item: ${itemName} using Gemini API`);
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${window.geminiApiKey}`;
+
+        const body = {
+            contents: [
+                {
+                    parts: [
+                        { text: `Summarize "${itemName}" into a couple of words.` }
+                    ]
+                }
+            ]
+        };
+
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(body)
+        });
+
+        const data = await response.json();
+
+        // Extract Gemini's output text
+        const summary = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        return summary || itemName;
+
+    } catch (error) {
+        console.error(`Error summarizing ${itemName} with Gemini API:`, error);
+        return itemName; // Return original name on error
+    }
+}
+
 
 // Share functions
 function setupShareButtons() {
@@ -1177,7 +1445,7 @@ function populateUsersList(listId, users) {
 function removeUser(uid, role) {
     if (!currentList || !currentListId) return;
     
-    const listRef = db.collection('lists').doc(currentListId);
+    const listRef = firebaseDb.collection('lists').doc(currentListId);
     const updateData = {};
     updateData[`${role}.${uid}`] = firebase.firestore.FieldValue.delete();
     
@@ -1215,7 +1483,7 @@ function addUserToList(role) {
     }
     
     // Find user by email
-    db.collection('users').where('email', '==', email).get()
+    firebaseDb.collection('users').where('email', '==', email).get()
         .then(snapshot => {
             if (snapshot.empty) {
                 showToast('User not found', 'error');
@@ -1233,7 +1501,7 @@ function addUserToList(role) {
             }
             
             // Update the list document
-            const listRef = db.collection('lists').doc(currentListId);
+            const listRef = firebaseDb.collection('lists').doc(currentListId);
             const updateData = {};
             const rolePath = role === 'collaborator' ? 'collaborators' : 'viewers';
             updateData[`${rolePath}.${userId}`] = userData.email;
@@ -1245,7 +1513,7 @@ function addUserToList(role) {
             document.getElementById(inputId).value = '';
             
             // Refresh the current list data
-            return db.collection('lists').doc(currentListId).get();
+            return firebaseDb.collection('lists').doc(currentListId).get();
         })
         .then(doc => {
             if (doc && doc.exists) {
@@ -1271,10 +1539,10 @@ function saveListEdit() {
     }
     
     const description = document.getElementById('editListDescription').value.trim();
-    const eventDate = document.getElementById('editListDate').value;
+    const eventDate = document.getElementById('editListEventDate').value;
     const isPublic = document.getElementById('editListPublic').checked;
     
-    const listRef = db.collection('lists').doc(currentListId);
+    const listRef = firebaseDb.collection('lists').doc(currentListId);
     listRef.update({
         name,
         description,
@@ -1293,9 +1561,10 @@ function saveListEdit() {
         currentList.isPublic = isPublic;
         
         // Update the list header
-        document.getElementById('listName').textContent = name;
-        document.getElementById('listDescription').textContent = description || 'No description';
-        document.getElementById('listDate').textContent = eventDate ? `Event date: ${eventDate}` : '';
+        document.getElementById('listTitle').textContent = name;
+        // Update the list in the UI
+        loadList(currentListId);
+        document.getElementById('listEventDate').textContent = eventDate ? `Event date: ${eventDate}` : '';
     })
     .catch(error => {
         console.error('Error updating list:', error);
@@ -1828,7 +2097,7 @@ function populateUsersList(listId, users) {
 function removeUser(uid, role) {
     if (!currentList || !currentListId) return;
     
-    const listRef = db.collection('lists').doc(currentListId);
+    const listRef = firebaseDb.collection('lists').doc(currentListId);
     const updateData = {};
     updateData[`${role}.${uid}`] = firebase.firestore.FieldValue.delete();
     
@@ -1866,7 +2135,7 @@ function addUserToList(role) {
     }
     
     // Find user by email
-    db.collection('users').where('email', '==', email).get()
+    firebaseDb.collection('users').where('email', '==', email).get()
         .then(snapshot => {
             if (snapshot.empty) {
                 showToast('User not found', 'error');
@@ -1884,7 +2153,7 @@ function addUserToList(role) {
             }
             
             // Update the list document
-            const listRef = db.collection('lists').doc(currentListId);
+            const listRef = firebaseDb.collection('lists').doc(currentListId);
             const updateData = {};
             const rolePath = role === 'collaborator' ? 'collaborators' : 'viewers';
             updateData[`${rolePath}.${userId}`] = userData.email;
@@ -1896,7 +2165,7 @@ function addUserToList(role) {
             document.getElementById(inputId).value = '';
             
             // Refresh the current list data
-            return db.collection('lists').doc(currentListId).get();
+            return firebaseDb.collection('lists').doc(currentListId).get();
         })
         .then(doc => {
             if (doc && doc.exists) {
@@ -1922,10 +2191,10 @@ function saveListEdit() {
     }
     
     const description = document.getElementById('editListDescription').value.trim();
-    const eventDate = document.getElementById('editListDate').value;
+    const eventDate = document.getElementById('editListEventDate').value;
     const isPublic = document.getElementById('editListPublic').checked;
     
-    const listRef = db.collection('lists').doc(currentListId);
+    const listRef = firebaseDb.collection('lists').doc(currentListId);
     listRef.update({
         name,
         description,
@@ -1944,9 +2213,10 @@ function saveListEdit() {
         currentList.isPublic = isPublic;
         
         // Update the list header
-        document.getElementById('listName').textContent = name;
-        document.getElementById('listDescription').textContent = description || 'No description';
-        document.getElementById('listDate').textContent = eventDate ? `Event date: ${eventDate}` : '';
+        document.getElementById('listTitle').textContent = name;
+        // Update the list in the UI
+        loadList(currentListId);
+        document.getElementById('listEventDate').textContent = eventDate ? `Event date: ${eventDate}` : '';
     })
     .catch(error => {
         console.error('Error updating list:', error);
@@ -1973,6 +2243,107 @@ function copyShareLink(type) {
     } catch (error) {
         console.error('Error generating share link:', error);
         showToast('Error generating share link', 'error');
+    }
+}
+
+// Import list functionality
+async function importList() {
+    if (!currentUser || !currentList || currentUser.email !== currentList.owner) {
+        showToast('Only the list owner can import items.', 'error');
+        return;
+    }
+
+    showToast('Importing list items...', 'info');
+
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'application/json'; // Only allow JSON files
+    fileInput.style.display = 'none'; // Hide the input element
+    document.body.appendChild(fileInput);
+
+    fileInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) {
+            showToast('No file selected for import.', 'info');
+            document.body.removeChild(fileInput); // Clean up
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const jsonInput = e.target.result;
+            try {
+                const itemsToImport = JSON.parse(jsonInput);
+                if (!Array.isArray(itemsToImport)) {
+                    throw new Error('Invalid JSON format. Expected an array of items.');
+                }
+
+                const listItemsCollectionRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+
+                // Get current position once, outside the loop
+                const currentSize = (await listItemsCollectionRef.get()).size;
+
+                for (let i = 0; i < itemsToImport.length; i++) {
+                    const itemData = itemsToImport[i];
+
+                    // Basic validation and mapping for imported items
+                    const summarizedName = await summarizeItemName(itemData.name || 'Untitled Item');
+                    const newItem = {
+                        name: summarizedName,
+                        url: itemData.link || '',
+                        description: itemData.description || '',
+                        imageUrl: itemData.imageUrl || '',
+                        notes: itemData.notes || '',
+                        price: itemData.price || null,
+                        position: currentSize + i + 1, // More efficient position calculation
+                        bought: false,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+
+                    await listItemsCollectionRef.add(newItem);
+                }
+
+                showToast('Items imported successfully!', 'success');
+                loadListItems(currentListId); // Refresh the UI after import
+
+            } catch (error) {
+                console.error('Error importing list:', error);
+                showToast(`Error importing list: ${error.message}`, 'error');
+            } finally {
+                // Clean up the input element
+                if (document.body.contains(fileInput)) {
+                    document.body.removeChild(fileInput);
+                }
+            }
+        };
+
+        reader.onerror = function() {
+            showToast('Error reading file', 'error');
+            if (document.body.contains(fileInput)) {
+                document.body.removeChild(fileInput);
+            }
+        };
+
+        reader.readAsText(file);
+    });
+
+    fileInput.click(); // Programmatically click the hidden input to open the file picker
+}
+async function deleteItem(itemId, itemName) {
+    if (!currentUser || !currentList || (!currentList.owner === currentUser.email && !currentList.collaborators.includes(currentUser.email))) {
+        showToast('Only the list owner or a collaborator can delete items.', 'error');
+        return;
+    }
+
+    if (confirm(`Are you sure you want to delete '${itemName}'? This action cannot be undone.`)) {
+        try {
+            await firebaseDb.collection('lists').doc(currentListId).collection('items').doc(itemId).delete();
+            showToast(`'${itemName}' deleted successfully!`, 'success');
+            loadListItems(currentListId); // Refresh the UI
+        } catch (error) {
+            console.error('Error deleting item:', error);
+            showToast(`Error deleting item: ${error.message}`, 'error');
+        }
     }
 }
 
@@ -2435,7 +2806,7 @@ function populateUsersList(listId, users) {
 function removeUser(uid, role) {
     if (!currentList || !currentListId) return;
     
-    const listRef = db.collection('lists').doc(currentListId);
+    const listRef = firebaseDb.collection('lists').doc(currentListId);
     const updateData = {};
     updateData[`${role}.${uid}`] = firebase.firestore.FieldValue.delete();
     
@@ -2473,7 +2844,7 @@ function addUserToList(role) {
     }
     
     // Find user by email
-    db.collection('users').where('email', '==', email).get()
+    firebaseDb.collection('users').where('email', '==', email).get()
         .then(snapshot => {
             if (snapshot.empty) {
                 showToast('User not found', 'error');
@@ -2491,7 +2862,7 @@ function addUserToList(role) {
             }
             
             // Update the list document
-            const listRef = db.collection('lists').doc(currentListId);
+            const listRef = firebaseDb.collection('lists').doc(currentListId);
             const updateData = {};
             const rolePath = role === 'collaborator' ? 'collaborators' : 'viewers';
             updateData[`${rolePath}.${userId}`] = userData.email;
@@ -2503,7 +2874,7 @@ function addUserToList(role) {
             document.getElementById(inputId).value = '';
             
             // Refresh the current list data
-            return db.collection('lists').doc(currentListId).get();
+            return firebaseDb.collection('lists').doc(currentListId).get();
         })
         .then(doc => {
             if (doc && doc.exists) {
@@ -2529,10 +2900,10 @@ function saveListEdit() {
     }
     
     const description = document.getElementById('editListDescription').value.trim();
-    const eventDate = document.getElementById('editListDate').value;
+    const eventDate = document.getElementById('editListEventDate').value;
     const isPublic = document.getElementById('editListPublic').checked;
     
-    const listRef = db.collection('lists').doc(currentListId);
+    const listRef = firebaseDb.collection('lists').doc(currentListId);
     listRef.update({
         name,
         description,
@@ -2551,9 +2922,10 @@ function saveListEdit() {
         currentList.isPublic = isPublic;
         
         // Update the list header
-        document.getElementById('listName').textContent = name;
-        document.getElementById('listDescription').textContent = description || 'No description';
-        document.getElementById('listDate').textContent = eventDate ? `Event date: ${eventDate}` : '';
+        document.getElementById('listTitle').textContent = name;
+        // Update the list in the UI
+        loadList(currentListId);
+        document.getElementById('listEventDate').textContent = eventDate ? `Event date: ${eventDate}` : '';
     })
     .catch(error => {
         console.error('Error updating list:', error);

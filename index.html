@@ -115,6 +115,10 @@
                         <span class="material-icons">edit</span>
                         Manage List
                     </button>
+                    <button class="btn btn-secondary" id="importListBtn" style="display: none;">
+                        <span class="material-icons">cloud_upload</span>
+                        Import List
+                    </button>
                 </div>
             </div>
             
@@ -245,6 +249,13 @@
                 <button class="icon-button modal-close">
                     <span class="material-icons">close</span>
                 </button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label for="geminiApiKey">Gemini API Key</label>
+                    <input type="password" id="geminiApiKey" placeholder="Enter your Gemini API Key">
+                    <p class="input-helper-text">Your API key is stored locally in your browser.</p>
+                </div>
             </div>
             <div class="modal-body">
                 <div class="settings-section">
