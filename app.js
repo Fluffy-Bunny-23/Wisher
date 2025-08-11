@@ -1,4 +1,3 @@
-console.log("JS is running")
 // Global state
 let currentUser = null;
 let currentList = null;
@@ -1091,6 +1090,41 @@ function showAddItemModal() {
     document.getElementById('itemModalTitle').textContent = 'Add Item';
     document.getElementById('itemForm').reset();
     document.getElementById('itemForm').dataset.mode = 'add';
+    
+    // Clear description and notes fields
+    document.getElementById('itemDescription').value = '';
+    document.getElementById('itemNotes').value = '';
+
+    const itemNameInput = document.getElementById('itemName');
+    let typingTimer;
+    const doneTypingInterval = 1000; // 1 second
+
+    // Define the event handler function
+    const handleItemNameInputEvent = () => {
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(async () => {
+            const itemName = itemNameInput.value.trim();
+            if (itemName) {
+                showLoading();
+                const { description, notes } = await generateItemDetails(itemName);
+                document.getElementById('itemDescription').value = description;
+                document.getElementById('itemNotes').value = notes;
+                hideLoading();
+            }
+        }, doneTypingInterval);
+    };
+
+    // Remove any existing listeners to prevent duplicates before adding new ones
+    itemNameInput.removeEventListener('input', itemNameInput._handleItemNameInputEvent);
+    itemNameInput.removeEventListener('blur', itemNameInput._handleItemNameInputEvent);
+
+    // Store the function reference on the element itself to allow removal later
+    itemNameInput._handleItemNameInputEvent = handleItemNameInputEvent;
+
+    // Add event listeners
+    itemNameInput.addEventListener('input', itemNameInput._handleItemNameInputEvent);
+    itemNameInput.addEventListener('blur', itemNameInput._handleItemNameInputEvent);
+
     showModal('itemModal');
 }
 
@@ -1284,23 +1318,36 @@ function loadSettings() {
     }
 }
 
-// Initialize Gemini API (placeholder for actual API call)
+
+// Initialize Gemini API
 async function summarizeItemName(itemName) {
     if (!window.geminiApiKey) {
-        console.warn('Gemini API Key not set. Cannot summarize item name.');
-        return itemName; // Return original name if API key is missing
+        console.warn('Gemini API Key not set. Cannot generate item details.');
+        return { description: "", notes: "" };
     }
 
     try {
-        console.log(`Summarizing item: ${itemName} using Gemini API`);
+        console.log(`Generating details for item: ${itemName} using Gemini API`);
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${window.geminiApiKey}`;
+        const PROMPT = `Generate info for the following item. Make a name that is just a few words. make the description a short 1 or less sentance about twhat the product is. make the notes some of the features or other models that are cheaper, etc. Use the provided example as a reference for style and content structure. Ensure notes are in Markdown format for links.
+
+Example:
+Item Name: "Insta360 X5"
+Description: "The newest 360 Camera from Insta 360. Similar to GoPro, but records all angles."
+Notes: "The [Insta360 X4](https://share.google/hzIG76Kf5MtnCNikb) is a cheaper alternative."
+
+Generate for:
+Item Name: "${itemName}"
+Description:
+Notes:`;
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${window.geminiApiKey}`;
 
         const body = {
             contents: [
                 {
                     parts: [
-                        { text: `Summarize "${itemName}" into a couple of words.` }
+                        { text: PROMPT }
                     ]
                 }
             ]
@@ -1315,14 +1362,20 @@ async function summarizeItemName(itemName) {
         });
 
         const data = await response.json();
+        const generatedText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
-        // Extract Gemini's output text
-        const summary = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        return summary || itemName;
+        // Parse the generated text into description and notes
+        const descriptionMatch = generatedText.match(/Description:\s*([\s\S]*?)(?:\nNotes:|$)/i);
+        const notesMatch = generatedText.match(/Notes:\s*([\s\S]*)/i);
+
+        const description = descriptionMatch ? descriptionMatch[1].trim() : "";
+        const notes = notesMatch ? notesMatch[1].trim() : "";
+
+        return { description, notes };
 
     } catch (error) {
-        console.error(`Error summarizing ${itemName} with Gemini API:`, error);
-        return itemName; // Return original name on error
+        console.error(`Error generating details for ${itemName} with Gemini API:`, error);
+        return { description: "", notes: "" }; // Return empty details on error
     }
 }
 
@@ -2287,13 +2340,13 @@ async function importList() {
                     const itemData = itemsToImport[i];
 
                     // Basic validation and mapping for imported items
-                    const summarizedName = await summarizeItemName(itemData.name || 'Untitled Item');
+                    const { description: generatedDescription, notes: generatedNotes } = await summarizeItemName(itemData.name || 'Untitled Item');
                     const newItem = {
-                        name: summarizedName,
+                        name: itemData.name || 'Untitled Item',
                         url: itemData.link || '',
-                        description: itemData.description || '',
+                        description: generatedDescription || itemData.description || '',
                         imageUrl: itemData.imageUrl || '',
-                        notes: itemData.notes || '',
+                        notes: generatedNotes || itemData.notes || '',
                         price: itemData.price || null,
                         position: currentSize + i + 1, // More efficient position calculation
                         bought: false,
@@ -2301,10 +2354,10 @@ async function importList() {
                     };
 
                     await listItemsCollectionRef.add(newItem);
+                    loadListItems(currentListId); // Refresh the UI after each item is imported
                 }
 
                 showToast('Items imported successfully!', 'success');
-                loadListItems(currentListId); // Refresh the UI after import
 
             } catch (error) {
                 console.error('Error importing list:', error);
