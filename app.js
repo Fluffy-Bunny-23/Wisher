@@ -18,6 +18,7 @@ const sidebarListContainer = document.getElementById('sidebarListContainer');
 const createListSidebarBtn = document.getElementById('createListSidebarBtn');
 const menuButton = document.getElementById('menuButton'); // Assuming you have a menu button in your app-bar
 const mainContent = document.querySelector('.main-content'); // Or the main container that needs to shift
+const appBar = document.getElementById('app-bar');
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
@@ -65,6 +66,7 @@ function initializeApp() {
         if (!createListSidebarBtn) console.error('Element not found: createListSidebarBtn');
         if (!menuButton) console.error('Element not found: menuButton');
         if (!mainContent) console.error('Element not found: mainContent');
+        if (!appBar) console.error('Element not found: appBar');
         
         console.log('App initialization completed');
     } catch (error) {
@@ -494,7 +496,7 @@ async function signOut() {
 
 // List management functions
 async function loadUserLists() {
-    console.log('Loading user lists for:', currentUser);
+    console.log('Loading user lists for:', currentUser); console.log('Current user email:', currentUser ? currentUser.email : 'No user logged in');
     if (!currentUser) {
         console.log('No current user, returning');
         return;
@@ -547,9 +549,11 @@ async function loadUserLists() {
                 allLists.push({ id: doc.id, ...doc.data(), role: 'collaborator' });
             }
         });
+        userLists = allLists;
         
         console.log('Total lists to display:', allLists.length);
         displayLists(allLists);
+        populateSidebarLists();
         hideLoading();
     } catch (error) {
         console.error('Error loading lists:', error);
@@ -1106,7 +1110,8 @@ function showAddItemModal() {
             const itemName = itemNameInput.value.trim();
             if (itemName) {
                 showLoading();
-                const { description, notes } = await generateItemDetails(itemName);
+                const { generatedName, description, notes } = await summarizeItemName(itemName);
+                document.getElementById('itemName').value = generatedName; // Update the item name input
                 document.getElementById('itemDescription').value = description;
                 document.getElementById('itemNotes').value = notes;
                 hideLoading();
@@ -1318,7 +1323,6 @@ function loadSettings() {
     }
 }
 
-
 // Initialize Gemini API
 async function summarizeItemName(itemName) {
     if (!window.geminiApiKey) {
@@ -1332,12 +1336,13 @@ async function summarizeItemName(itemName) {
         const PROMPT = `Generate info for the following item. Make a name that is just a few words. make the description a short 1 or less sentance about twhat the product is. make the notes some of the features or other models that are cheaper, etc. Use the provided example as a reference for style and content structure. Ensure notes are in Markdown format for links.
 
 Example:
-Item Name: "Insta360 X5"
-Description: "The newest 360 Camera from Insta 360. Similar to GoPro, but records all angles."
-Notes: "The [Insta360 X4](https://share.google/hzIG76Kf5MtnCNikb) is a cheaper alternative."
+Item Name: Insta360 X5
+Description: The newest 360 Camera from Insta 360. Similar to GoPro, but records all angles.
+Notes: The [Insta360 X4](https://share.google/hzIG76Kf5MtnCNikb) is a cheaper alternative.
 
 Generate for:
 Item Name: "${itemName}"
+Item Name:
 Description:
 Notes:`;
 
@@ -1365,13 +1370,15 @@ Notes:`;
         const generatedText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
         // Parse the generated text into description and notes
+        const nameMatch = generatedText.match(/Item Name:\s*([\s\S]*?)(?:\nDescription:|$)/i);
         const descriptionMatch = generatedText.match(/Description:\s*([\s\S]*?)(?:\nNotes:|$)/i);
         const notesMatch = generatedText.match(/Notes:\s*([\s\S]*)/i);
 
+        const generatedName = nameMatch ? nameMatch[1].trim() : "Ai Did not provide a name"; // Fallback to original itemName if AI doesn't provide a name
         const description = descriptionMatch ? descriptionMatch[1].trim() : "";
         const notes = notesMatch ? notesMatch[1].trim() : "";
 
-        return { description, notes };
+        return { generatedName, description, notes };
 
     } catch (error) {
         console.error(`Error generating details for ${itemName} with Gemini API:`, error);
@@ -2340,9 +2347,9 @@ async function importList() {
                     const itemData = itemsToImport[i];
 
                     // Basic validation and mapping for imported items
-                    const { description: generatedDescription, notes: generatedNotes } = await summarizeItemName(itemData.name || 'Untitled Item');
+                    const { generatedName, description: generatedDescription, notes: generatedNotes } = await summarizeItemName(itemData.name || 'Untitled Item');
                     const newItem = {
-                        name: itemData.name || 'Untitled Item',
+                        name: generatedName || itemData.name || 'Untitled Item',
                         url: itemData.link || '',
                         description: generatedDescription || itemData.description || '',
                         imageUrl: itemData.imageUrl || '',
