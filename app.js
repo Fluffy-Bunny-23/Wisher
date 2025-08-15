@@ -80,7 +80,10 @@ function setupAuthStateListener() {
         const unsubscribe = firebaseAuth.onAuthStateChanged(user => {
             console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
             if (user) {
-                console.log('User details:', user.email, user.uid);
+                console.log('User provider data:', user.providerData); // Add this line to inspect provider data
+            }
+            if (user) {
+                console.log('User details:', user.email, user.uid, user.providerData);
                 currentUser = user;
                 onUserSignedIn();
             } else {
@@ -1355,7 +1358,7 @@ Item Name:
 Description:
 Notes:`;
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${window.geminiApiKey}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${keyToUse}`;
 
         const body = {
             contents: [
@@ -1767,6 +1770,7 @@ function generateQRCode(type) {
         const container = document.getElementById('qrCodeContainer');
         
         // Check if QRCode library is available
+        console.log('typeof QRCode:', typeof QRCode);
         if (typeof QRCode !== 'undefined') {
             try {
                  new QRCode(canvas, {

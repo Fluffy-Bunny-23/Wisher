@@ -17,6 +17,12 @@ import sys
 import os
 from urllib.parse import urlparse
 
+# Global counter for request logs
+request_log_counter = 0
+
+# Global variable to store header lines
+HEADER_LINES = []
+
 class CORSHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     """HTTP Request Handler with CORS support"""
     
@@ -56,7 +62,18 @@ class CORSHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         return mimetype
     
     def log_message(self, format, *args):
-        """Custom log format"""
+        """Custom log format with periodic screen clear and header reprint"""
+        global request_log_counter
+        global HEADER_LINES
+
+        request_log_counter += 1
+
+        if request_log_counter % 20 == 0:
+            os.system('cls' if os.name == 'nt' else 'clear')
+            for line in HEADER_LINES:
+                print(line)
+            print("\n" + "-"*50 + "\n") # Add a separator
+
         print(f"[{self.log_date_time_string()}] {format % args}")
 
 def main():
@@ -73,15 +90,24 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(script_dir)
     
+    # Store header lines globally
+    global HEADER_LINES
+    HEADER_LINES = [
+        f"\n🎁 Wisher Development Server",
+        f"📁 Serving files from: {script_dir}",
+        f"🌐 Server running at: http://localhost:{port}",
+        f"📱 Mobile access: http://{get_local_ip()}:{port}",
+        f"\n🔧 Make sure to configure Firebase settings in firebase-config.js",
+        f"⚡ Press Ctrl+C to stop the server\n"
+    ]
+
+    # Print initial header
+    for line in HEADER_LINES:
+        print(line)
+    print("\n" + "-"*50 + "\n") # Add a separator
+    
     # Create server
     with socketserver.TCPServer(("", port), CORSHTTPRequestHandler) as httpd:
-        print(f"\n🎁 Wisher Development Server")
-        print(f"📁 Serving files from: {script_dir}")
-        print(f"🌐 Server running at: http://localhost:{port}")
-        print(f"📱 Mobile access: http://{get_local_ip()}:{port}")
-        print(f"\n🔧 Make sure to configure Firebase settings in firebase-config.js")
-        print(f"⚡ Press Ctrl+C to stop the server\n")
-        
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
