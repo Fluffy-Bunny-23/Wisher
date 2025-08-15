@@ -42,17 +42,8 @@ function initializeApp() {
             localStorage.setItem('lastViewedList', listId);
         }
         
-        // Load settings
-        const savedApiKey = localStorage.getItem('geminiApiKey');
-        if (savedApiKey) {
-            geminiApiKey = savedApiKey;
-            const apiKeyInput = document.getElementById('geminiApiKey');
-            if (apiKeyInput) {
-                apiKeyInput.value = savedApiKey;
-            } else {
-                console.error('Element not found: geminiApiKey');
-            }
-        }
+        // Gemini API Key will be loaded from the list data, not localStorage directly
+        // The input field will be updated when settings are loaded or a list is loaded.
         
         // Ensure DOM elements are properly initialized
         console.log('Verifying DOM elements initialization');
@@ -116,7 +107,11 @@ function onUserSignedIn() {
     console.log('User signed in:', currentUser);
     try {
         hideLoading();
-        
+        document.getElementById('loginButton').classList.add('hidden');
+        document.getElementById('userBtn').classList.remove('hidden');
+        document.getElementById('userEmail').textContent = currentUser.email;
+        document.getElementById('userUid').textContent = currentUser.uid;
+
         console.log('Checking for specific list ID in URL:', currentListId);
         if (currentListId) {
             // Load specific list from URL
@@ -138,11 +133,14 @@ function onUserSignedIn() {
 function onUserSignedOut() {
     hideLoading();
     showScreen('authScreen');
+    document.getElementById('loginButton').classList.remove('hidden');
+    document.getElementById('userBtn').classList.add('hidden');
     currentList = null;
     currentListId = null;
 }
 
 function setupEventListeners() {
+
     try {
         console.log('Setting up event listeners');
         
@@ -202,9 +200,16 @@ function setupEventListeners() {
         
         const userBtn = document.getElementById('userBtn');
         if (userBtn) {
-            userBtn.addEventListener('click', signOut);
+            userBtn.addEventListener('click', () => showModal('userProfileModal'));
         } else {
             console.error('Element not found: userBtn');
+        }
+
+        const logoutButton = document.getElementById('logoutButton');
+        if (logoutButton) {
+            logoutButton.addEventListener('click', signOut);
+        } else {
+            console.error('Element not found: logoutButton');
         }
         
         // List management
@@ -268,6 +273,7 @@ function setupEventListeners() {
         const saveEditBtn = document.getElementById('saveEditBtn');
         if (saveEditBtn) {
             saveEditBtn.addEventListener('click', saveListEdit);
+        
         } else {
             console.error('Element not found: saveEditBtn');
         }
@@ -603,6 +609,7 @@ async function createNewList() {
     
     const eventDate = prompt('Enter event date (YYYY-MM-DD):');
     const description = prompt('Enter description (optional):') || '';
+    const geminiApiKeyForList = prompt('Enter Gemini API Key for this list (optional):') || '';
     
     try {
         showLoading();
@@ -615,6 +622,7 @@ async function createNewList() {
             viewers: [],
             isPublic: false,
             collaboratorShareAccess: true,
+            geminiApiKey: geminiApiKeyForList, // Store the API key with the list
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
@@ -665,6 +673,15 @@ async function loadList(listId) {
         console.log('List found, processing data');
         currentList = { id: listDoc.id, ...listDoc.data() };
         currentListId = listId;
+
+        // Update global geminiApiKey if present in the list data
+        if (currentList.geminiApiKey) {
+            geminiApiKey = currentList.geminiApiKey;
+            console.log('Gemini API Key loaded from list:', geminiApiKey ? 'Present' : 'Not Present');
+        } else {
+            geminiApiKey = ''; // Clear if not present in list
+            console.log('No Gemini API Key found for this list.');
+        }
         
         // Update URL without reloading
         const newUrl = new URL(window.location);
@@ -1301,31 +1318,23 @@ async function updateItemPosition(itemId, newPosition) {
 
 // Settings functions
 function saveSettings() {
-    const geminiApiKey = document.getElementById('geminiApiKey').value;
-    
-    if (geminiApiKey) {
-        localStorage.setItem('geminiApiKey', geminiApiKey);
-        window.geminiApiKey = geminiApiKey; // Make it globally accessible or pass it around
-    } else {
-        localStorage.removeItem('geminiApiKey');
-        window.geminiApiKey = null;
-    }
+    // Gemini API Key is now stored per list, so no global saving here
     showToast('Settings saved!', 'success');
     hideModal('settingsModal');
 }
 
 // Function to load settings on app initialization
 function loadSettings() {
-    const geminiApiKey = localStorage.getItem('geminiApiKey');
-    if (geminiApiKey) {
-        document.getElementById('geminiApiKey').value = geminiApiKey;
-        window.geminiApiKey = geminiApiKey;
+    // Gemini API Key is loaded from the current list, not global settings
+    const apiKeyInput = document.getElementById('geminiApiKey');
+    if (apiKeyInput) {
+        apiKeyInput.value = geminiApiKey; // Use the globally set geminiApiKey (from current list)
     }
 }
-
 // Initialize Gemini API
-async function summarizeItemName(itemName) {
-    if (!window.geminiApiKey) {
+async function summarizeItemName(itemName, apiKey) {
+    const keyToUse = apiKey || localStorage.getItem('geminiApiKey');
+    if (!keyToUse) {
         console.warn('Gemini API Key not set. Cannot generate item details.');
         return { description: "", notes: "" };
     }
@@ -1471,6 +1480,7 @@ function showEditModal() {
     document.getElementById('editListDescription').value = currentList.description || '';
     document.getElementById('editListEventDate').value = currentList.eventDate || '';
     document.getElementById('editListPublic').checked = currentList.isPublic || false;
+
     
     // Populate collaborators and viewers lists
     populateUsersList('collaboratorsList', currentList.collaborators || {});
@@ -1590,6 +1600,7 @@ function addUserToList(role) {
 }
 
 function saveListEdit() {
+
     if (!currentList || !currentListId) return;
     
     const name = document.getElementById('editListName').value.trim();
@@ -1601,7 +1612,6 @@ function saveListEdit() {
     const description = document.getElementById('editListDescription').value.trim();
     const eventDate = document.getElementById('editListEventDate').value;
     const isPublic = document.getElementById('editListPublic').checked;
-    
     const listRef = firebaseDb.collection('lists').doc(currentListId);
     listRef.update({
         name,
@@ -1619,6 +1629,7 @@ function saveListEdit() {
         currentList.description = description;
         currentList.eventDate = eventDate;
         currentList.isPublic = isPublic;
+
         
         // Update the list header
         document.getElementById('listTitle').textContent = name;
@@ -2313,81 +2324,115 @@ async function importList() {
         return;
     }
 
-    showToast('Importing list items...', 'info');
+    // Show the AI settings modal first
+    showModal('importAiSettingsModal');
 
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = 'application/json'; // Only allow JSON files
-    fileInput.style.display = 'none'; // Hide the input element
-    document.body.appendChild(fileInput);
+    // Populate the API key field from localStorage if available
+    document.getElementById('importGeminiApiKey').value = localStorage.getItem('geminiApiKey') || '';
 
-    fileInput.addEventListener('change', async (event) => {
-        const file = event.target.files[0];
-        if (!file) {
-            showToast('No file selected for import.', 'info');
-            document.body.removeChild(fileInput); // Clean up
-            return;
+    // Handle the "Continue to Import" button click
+    document.getElementById('confirmImportAiSettingsBtn').onclick = async () => {
+        hideModal('importAiSettingsModal');
+        showToast('Importing list items...', 'info');
+
+        const useAiSummarization = document.getElementById('useAiSummarization').checked;
+        const importGeminiApiKey = document.getElementById('importGeminiApiKey').value.trim();
+        const saveGeminiApiKeyLocal = document.getElementById('saveGeminiApiKeyLocal').checked;
+
+        if (saveGeminiApiKeyLocal) {
+            localStorage.setItem('geminiApiKey', importGeminiApiKey);
+        } else {
+            localStorage.removeItem('geminiApiKey');
         }
 
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            const jsonInput = e.target.result;
-            try {
-                const itemsToImport = JSON.parse(jsonInput);
-                if (!Array.isArray(itemsToImport)) {
-                    throw new Error('Invalid JSON format. Expected an array of items.');
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'application/json'; // Only allow JSON files
+        fileInput.style.display = 'none'; // Hide the input element
+        document.body.appendChild(fileInput);
+
+        fileInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) {
+                showToast('No file selected for import.', 'info');
+                document.body.removeChild(fileInput); // Clean up
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const jsonInput = e.target.result;
+                try {
+                    const itemsToImport = JSON.parse(jsonInput);
+                    if (!Array.isArray(itemsToImport)) {
+                        throw new Error('Invalid JSON format. Expected an array of items.');
+                    }
+
+                    const listItemsCollectionRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+
+                    // Get current position once, outside the loop
+                    const currentSize = (await listItemsCollectionRef.get()).size;
+
+                    for (let i = 0; i < itemsToImport.length; i++) {
+                        const itemData = itemsToImport[i];
+
+                        let generatedName = itemData.name || 'Untitled Item';
+                        let description = itemData.description || '';
+                        let notes = itemData.notes || '';
+
+                        if (useAiSummarization && importGeminiApiKey) {
+                            const aiDetails = await summarizeItemName(itemData.name || 'Untitled Item', importGeminiApiKey);
+                            generatedName = aiDetails.generatedName || generatedName;
+                            description = aiDetails.description || description;
+                            notes = aiDetails.notes || notes;
+                        }
+
+                        const newItem = {
+                            name: generatedName,
+                            url: itemData.link || '',
+                            description: description,
+                            imageUrl: itemData.imageUrl || '',
+                            notes: notes,
+                            price: itemData.price || null,
+                            position: currentSize + i + 1, // More efficient position calculation
+                            bought: false,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        };
+
+                        await listItemsCollectionRef.add(newItem);
+                        loadListItems(currentListId); // Refresh the UI after each item is imported
+                    }
+
+                    showToast('Items imported successfully!', 'success');
+
+                } catch (error) {
+                    console.error('Error importing list:', error);
+                    showToast(`Error importing list: ${error.message}`, 'error');
+                } finally {
+                    // Clean up the input element
+                    if (document.body.contains(fileInput)) {
+                        document.body.removeChild(fileInput);
+                    }
                 }
+            };
 
-                const listItemsCollectionRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
-
-                // Get current position once, outside the loop
-                const currentSize = (await listItemsCollectionRef.get()).size;
-
-                for (let i = 0; i < itemsToImport.length; i++) {
-                    const itemData = itemsToImport[i];
-
-                    // Basic validation and mapping for imported items
-                    const { generatedName, description: generatedDescription, notes: generatedNotes } = await summarizeItemName(itemData.name || 'Untitled Item');
-                    const newItem = {
-                        name: generatedName || itemData.name || 'Untitled Item',
-                        url: itemData.link || '',
-                        description: generatedDescription || itemData.description || '',
-                        imageUrl: itemData.imageUrl || '',
-                        notes: generatedNotes || itemData.notes || '',
-                        price: itemData.price || null,
-                        position: currentSize + i + 1, // More efficient position calculation
-                        bought: false,
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                    };
-
-                    await listItemsCollectionRef.add(newItem);
-                    loadListItems(currentListId); // Refresh the UI after each item is imported
-                }
-
-                showToast('Items imported successfully!', 'success');
-
-            } catch (error) {
-                console.error('Error importing list:', error);
-                showToast(`Error importing list: ${error.message}`, 'error');
-            } finally {
-                // Clean up the input element
+            reader.onerror = function() {
+                showToast('Error reading file', 'error');
                 if (document.body.contains(fileInput)) {
                     document.body.removeChild(fileInput);
                 }
-            }
-        };
+            };
 
-        reader.onerror = function() {
-            showToast('Error reading file', 'error');
-            if (document.body.contains(fileInput)) {
-                document.body.removeChild(fileInput);
-            }
-        };
+            reader.readAsText(file);
+        });
 
-        reader.readAsText(file);
-    });
+        fileInput.click(); // Programmatically click the hidden input to open the file picker
+    };
 
-    fileInput.click(); // Programmatically click the hidden input to open the file picker
+    // Add event listener for the cancel button
+    document.getElementById('cancelImportAiSettingsBtn').onclick = () => {
+        hideModal('importAiSettingsModal');
+    };
 }
 async function deleteItem(itemId, itemName) {
     if (!currentUser || !currentList || (!currentList.owner === currentUser.email && !currentList.collaborators.includes(currentUser.email))) {

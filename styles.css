@@ -140,6 +140,12 @@ p {
     transition: margin-left .5s; /* Smooth transition for content shift */
 }
 
+.app-bar-actions {
+    display: flex;
+    gap: 10px; /* Adjust as needed for spacing between buttons */
+    margin-left: auto; /* Pushes the actions to the right */
+}
+
 .app-bar.shifted {
     margin-left: 250px;
 }
@@ -1089,4 +1095,32 @@ input:checked + .slider:before {
     box-shadow: none;
     border: 1px solid var(--divider);
   }
+}
+
+/* Custom Modal Styles for importAiSettingsModal */
+#importAiSettingsModal .modal-content {
+    padding: 20px;
+}
+
+#importAiSettingsModal .modal-header {
+    margin-bottom: 20px;
+}
+
+#importAiSettingsModal .form-check {
+    margin-bottom: 15px;
+}
+
+#importAiSettingsModal .form-label {
+    font-weight: bold;
+}
+
+#importAiSettingsModal small.form-text {
+    display: block;
+    margin-top: 5px;
+}
+
+#importAiSettingsModal .modal-footer {
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+    justify-content: flex-end;
 }

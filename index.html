@@ -28,7 +28,13 @@
     <div id="app-bar" class="app-bar">
         <button id="menuButton" class="icon-button menu-button"><i class="material-icons">menu</i></button>
         <span id="app-bar-title" class="app-bar-title">Wisher</span>
-        <button id="authButton" class="btn btn-secondary">Login</button>
+        <div class="app-bar-actions">
+            <button id="helpBtn" class="icon-button"><i class="material-icons">help_outline</i></button>
+            <button id="settingsBtn" class="icon-button"><i class="material-icons">settings</i></button>
+            <button id="shareBtn" class="icon-button"><i class="material-icons">share</i></button>
+            <button id="userBtn" class="icon-button hidden"><i class="material-icons">account_circle</i></button>
+            <button id="loginButton" class="btn btn-secondary">Login</button>
+        </div>
     </div>
 
     <!-- Sidebar -->
@@ -184,7 +190,46 @@
         </div>
     </div>
 
-    <!-- Share Modal -->
+    <!-- Import List AI Settings Modal -->
+        <div id="importAiSettingsModal" class="modal">
+            <div class="modal-content">
+                <span class="modal-close">&times;</span>
+                <h2>Import List Settings</h2>
+                <div class="input-group">
+                    <input type="checkbox" id="useAiSummarization" checked>
+                    <label for="useAiSummarization">Use AI Summarization for imported items</label>
+                </div>
+                <div class="input-group">
+                    <label for="importGeminiApiKey">Gemini API Key (Optional)</label>
+                    <input type="text" id="importGeminiApiKey" placeholder="Enter your Gemini API Key">
+                </div>
+                <div class="input-group">
+                    <input type="checkbox" id="saveGeminiApiKeyLocal" checked>
+                    <label for="saveGeminiApiKeyLocal">Save API Key to Local Storage</label>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" id="confirmImportAiSettingsBtn">Continue to Import</button>
+                    <button class="btn btn-secondary modal-close">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+    <!-- User Profile Modal -->
+    <div id="userProfileModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>User Profile</h3>
+                <button class="icon-button modal-close"><span class="material-icons">close</span></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Email:</strong> <span id="userEmail"></span></p>
+                <p><strong>UID:</strong> <span id="userUid"></span></p>
+                <button id="logoutButton" class="btn btn-primary">Logout</button>
+            </div>
+        </div>
+    </div>
+
+        <!-- Share Modal -->
     <div id="shareModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -340,6 +385,30 @@
         </div>
     </div>
 
+    <!-- Import List AI Settings Modal -->
+    <div id="importAiSettingsModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h2>Import List Settings</h2>
+            <div class="input-group">
+                <input type="checkbox" id="useAiSummarization" checked>
+                <label for="useAiSummarization">Use AI Summarization for imported items</label>
+            </div>
+            <div class="input-group">
+                <label for="importGeminiApiKey">Gemini API Key (Optional)</label>
+                <input type="text" id="importGeminiApiKey" placeholder="Enter your Gemini API Key">
+            </div>
+            <div class="input-group">
+                <input type="checkbox" id="saveGeminiApiKeyLocal" checked>
+                <label for="saveGeminiApiKeyLocal">Save API Key to Local Storage</label>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="confirmImportAiSettingsBtn">Continue to Import</button>
+                <button class="btn btn-secondary modal-close">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Edit Modal -->
     <div id="editModal" class="modal">
         <div class="modal-content">
@@ -365,6 +434,8 @@
                         <label for="editListEventDate">Event Date</label>
                         <input type="date" id="editListEventDate">
                     </div>
+
+
                     
                     <div class="input-group">
                         <label for="editListPublic">Privacy</label>

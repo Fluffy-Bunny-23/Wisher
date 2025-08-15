@@ -86,6 +86,13 @@ def main():
             httpd.serve_forever()
         except KeyboardInterrupt:
             print("\n\n👋 Server stopped. Thanks for using Wisher!")
+        except Exception as e:
+            print(f"\n\n❌ Server crashed unexpectedly: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            httpd.server_close()
+            print("Server closed.")
 
 def get_local_ip():
     """Get the local IP address for mobile testing"""
