@@ -5,37 +5,37 @@ A modern, feature-rich wishlist application built with HTML, CSS, JavaScript, an
 ## Features
 
 ### Core Functionality
-- ✅ **Firebase Authentication** - Google OAuth and email/password sign-in
-- ✅ **Real-time Database** - Firestore backend with security rules
-- ✅ **Material Design UI** - Clean, modern interface with light blue theme
-- ✅ **Responsive Design** - Works on desktop, tablet, and mobile devices
+-  **Firebase Authentication** - Google OAuth and email/password sign-in
+-  **Real-time Database** - Firestore backend with security rules
+-  **Material Design UI** - Clean, modern interface with light blue theme
+-  **Responsive Design** - Works on desktop, tablet, and mobile devices
 
 ### List Management
-- ✅ **Multiple Lists** - Create and manage multiple wishlists
-- ✅ **Collaborative Editing** - Share lists with collaborators who can edit
-- ✅ **Viewer Access** - Share read-only access with viewers
-- ✅ **List Settings** - Manage list name, description, and event dates
+-  **Multiple Lists** - Create and manage multiple wishlists
+-  **Collaborative Editing** - Share lists with collaborators who can edit
+-  **Viewer Access** - Share read-only access with viewers
+-  **List Settings** - Manage list name, description, and event dates
 
 ### Item Features
-- ✅ **Rich Item Details** - Name, description, URL, image, price, and notes
-- ✅ **Markdown Support** - Rich text formatting in notes
-- ✅ **Drag & Drop Reordering** - Intuitive item positioning
-- ✅ **Quick Jump** - Navigate to specific item positions
-- ✅ **Purchase Tracking** - Mark items as bought with buyer information
-- ✅ **Image Support** - Display product images
+-  **Rich Item Details** - Name, description, URL, image, price, and notes
+-  **Markdown Support** - Rich text formatting in notes
+-  **Drag & Drop Reordering** - Intuitive item positioning
+-  **Quick Jump** - Navigate to specific item positions
+-  **Purchase Tracking** - Mark items as bought with buyer information
+-  **Image Support** - Display product images
 
 ### Sharing & Collaboration
-- ✅ **Multiple Share Options** - Links, QR codes, and email sharing
-- ✅ **Role-based Access** - Owner, collaborator, and viewer permissions
-- ✅ **Native Mobile Sharing** - Platform-specific share menus
-- ✅ **URL-based Access** - Direct links to specific lists and items
+-  **Multiple Share Options** - Links, QR codes, and email sharing
+-  **Role-based Access** - Owner, collaborator, and viewer permissions
+-  **Native Mobile Sharing** - Platform-specific share menus
+-  **URL-based Access** - Direct links to specific lists and items
 
 ### Advanced Features
-- ✅ **Show/Hide Bought Items** - Toggle visibility of purchased items
-- ✅ **Buyer Information** - Track who bought what with contact details
-- ✅ **Comments System** - Allow viewers to comment on items
-- ✅ **Gemini AI Integration** - Auto-summarize web pages (API key required)
-- ✅ **Offline Support** - Local storage for quick access
+-  **Show/Hide Bought Items** - Toggle visibility of purchased items
+-  **Buyer Information** - Track who bought what with contact details
+-  **Comments System** - Allow viewers to comment on items
+-  **Gemini AI Integration** - Auto-summarize web pages (API key required)
+-  **Offline Support** - Local storage for quick access
 
 
 ## Usage Guide

@@ -2,6 +2,7 @@
 let currentUser = null;
 let currentList = null;
 let currentListId = null;
+let currentListRole = null; // Global variable to store the role from the URL
 let showBoughtItems = false;
 let geminiApiKey = localStorage.getItem('geminiApiKey') || '';
 let selectedItems = [];
@@ -19,52 +20,6 @@ const createListSidebarBtn = document.getElementById('createListSidebarBtn');
 const menuButton = document.getElementById('menuButton'); // Assuming you have a menu button in your app-bar
 const mainContent = document.querySelector('.main-content'); // Or the main container that needs to shift
 const appBar = document.getElementById('app-bar');
-
-// Initialize app
-document.addEventListener('DOMContentLoaded', function() {
-    initializeApp();
-    setupEventListeners();
-    setupAuthStateListener();
-});
-
-function initializeApp() {
-    console.log('Initializing app');
-    try {
-        // Check for list ID in URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const listId = urlParams.get('list');
-        const itemId = urlParams.get('item');
-        
-        if (listId) {
-            console.log('List ID found in URL:', listId);
-            currentListId = listId;
-            // Store in localStorage for quick access
-            localStorage.setItem('lastViewedList', listId);
-        }
-        
-        // Gemini API Key will be loaded from the list data, not localStorage directly
-        // The input field will be updated when settings are loaded or a list is loaded.
-        
-        // Ensure DOM elements are properly initialized
-        console.log('Verifying DOM elements initialization');
-        if (!authScreen) console.error('Element not found: authScreen');
-        if (!listScreen) console.error('Element not found: listScreen');
-        if (!wishlistScreen) console.error('Element not found: wishlistScreen');
-        if (!loadingSpinner) console.error('Element not found: loadingSpinner');
-        if (!sidebar) console.error('Element not found: sidebar');
-        if (!sidebarCloseBtn) console.error('Element not found: sidebarCloseBtn');
-        if (!sidebarListContainer) console.error('Element not found: sidebarListContainer');
-        if (!createListSidebarBtn) console.error('Element not found: createListSidebarBtn');
-        if (!menuButton) console.error('Element not found: menuButton');
-        if (!mainContent) console.error('Element not found: mainContent');
-        if (!appBar) console.error('Element not found: appBar');
-        
-        console.log('App initialization completed');
-    } catch (error) {
-        console.error('Error initializing app:', error);
-    }
-}
-
 
 function setupAuthStateListener() {
     console.log('Setting up auth state listener');
@@ -106,6 +61,183 @@ function setupAuthStateListener() {
     }
 }
 
+// Initialize app
+document.addEventListener('DOMContentLoaded', function() {
+    initializeApp();
+    setupEventListeners();
+    setupAuthStateListener();
+});
+
+function initializeApp() {
+    console.log('Initializing app');
+    try {
+        // Check for list ID in URL
+        const urlParams = new URLSearchParams(window.location.search);
+    const role = urlParams.get('role'); // Extract role from URL
+        const listId = urlParams.get('list');
+        const itemId = urlParams.get('item');
+        
+        if (listId) {
+            console.log('List ID found in URL:', listId);
+            currentListId = listId;
+            // Store in localStorage for quick access
+            localStorage.setItem('lastViewedList', listId);
+            if (role) {
+                currentListRole = role; // Store the role globally
+                // Call a function to handle shared list access
+                handleSharedListAccess(listId, role);
+            }
+        }
+        
+        // Gemini API Key will be loaded from the list data, not localStorage directly
+        // The input field will be updated when settings are loaded or a list is loaded.
+        
+        // Ensure DOM elements are properly initialized
+        console.log('Verifying DOM elements initialization');
+        if (!authScreen) console.error('Element not found: authScreen');
+        if (!listScreen) console.error('Element not found: listScreen');
+        if (!wishlistScreen) console.error('Element not found: wishlistScreen');
+        if (!loadingSpinner) console.error('Element not found: loadingSpinner');
+        if (!sidebar) console.error('Element not found: sidebar');
+        if (!sidebarCloseBtn) console.error('Element not found: sidebarCloseBtn');
+        if (!sidebarListContainer) console.error('Element not found: sidebarListContainer');
+        if (!createListSidebarBtn) console.error('Element not found: createListSidebarBtn');
+        if (!menuButton) console.error('Element not found: menuButton');
+        if (!mainContent) console.error('Element not found: mainContent');
+        if (!appBar) console.error('Element not found: appBar');
+        
+        console.log('App initialization completed');
+    } catch (error) {
+        console.error('Error initializing app:', error);
+}
+
+function setupAuthStateListener() {
+    console.log('Setting up auth state listener');
+    
+    // Check if firebaseAuth is initialized
+    if (!firebaseAuth) {
+        console.error('Firebase Auth not initialized, cannot set up auth state listener');
+        showToast('Authentication service not available. Please refresh the page.', 'error');
+        return;
+    }
+    
+    try {
+        const unsubscribe = firebaseAuth.onAuthStateChanged(user => {
+            console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
+            if (user) {
+                console.log('User provider data:', user.providerData); // Add this line to inspect provider data
+            }
+            if (user) {
+                console.log('User details:', user.email, user.uid, user.providerData);
+                currentUser = user;
+                onUserSignedIn();
+            } else {
+                console.log('No user signed in');
+                currentUser = null;
+                onUserSignedOut();
+            }
+        }, error => {
+            console.error('Auth state listener error:', error);
+            showToast('Authentication error: ' + error.message, 'error');
+        });
+        
+        console.log('Auth state listener set up successfully');
+        
+        // Store the unsubscribe function for potential cleanup
+        window.authUnsubscribe = unsubscribe;
+    } catch (error) {
+        console.error('Error setting up auth state listener:', error);
+        showToast('Failed to initialize authentication. Please refresh the page.', 'error');
+    }
+}
+
+async function handleSharedListAccess(listId, role) {
+    if (!currentUser || !currentUser.email) {
+        console.warn('User not signed in, cannot handle shared list access yet.');
+        return; // Wait for user to sign in
+    }
+
+    try {
+        const listRef = firebase.firestore().collection('wishlists').doc(listId);
+        const doc = await listRef.get();
+
+        if (doc.exists) {
+            const listData = doc.data();
+            const userEmail = currentUser.email;
+
+            let updated = false;
+            if (role === 'collaborator' && (!listData.collaborators || !listData.collaborators.includes(userEmail))) {
+                await listRef.update({
+                    collaborators: firebase.firestore.FieldValue.arrayUnion(userEmail)
+                });
+                console.log(`User ${userEmail} added as collaborator to list ${listId}`);
+                updated = true;
+            } else if (role === 'viewer' && (!listData.viewers || !listData.viewers.includes(userEmail))) {
+                await listRef.update({
+                    viewers: firebase.firestore.FieldValue.arrayUnion(userEmail)
+                });
+                console.log(`User ${userEmail} added as viewer to list ${listId}`);
+                updated = true;
+            }
+
+            if (updated) {
+                showToast(`You have been added as a ${role} to this list!`, 'success');
+                // Reload the list to reflect changes
+                loadList(listId);
+            }
+        } else {
+            console.warn(`List ${listId} not found for shared access.`);
+        }
+    } catch (error) {
+        console.error('Error handling shared list access:', error);
+        showToast('Error joining shared list: ' + error.message, 'error');
+    }
+}
+}
+
+async function handleSharedListAccess(listId, role) {
+    if (!currentUser || !currentUser.email) {
+        console.warn('User not signed in, cannot handle shared list access yet.');
+        return; // Wait for user to sign in
+    }
+
+    try {
+        const listRef = firebase.firestore().collection('wishlists').doc(listId);
+        const doc = await listRef.get();
+
+        if (doc.exists) {
+            const listData = doc.data();
+            const userEmail = currentUser.email;
+
+            let updated = false;
+            if (role === 'collaborator' && (!listData.collaborators || !listData.collaborators.includes(userEmail))) {
+                await listRef.update({
+                    collaborators: firebase.firestore.FieldValue.arrayUnion(userEmail)
+                });
+                console.log(`User ${userEmail} added as collaborator to list ${listId}`);
+                updated = true;
+            } else if (role === 'viewer' && (!listData.viewers || !listData.viewers.includes(userEmail))) {
+                await listRef.update({
+                    viewers: firebase.firestore.FieldValue.arrayUnion(userEmail)
+                });
+                console.log(`User ${userEmail} added as viewer to list ${listId}`);
+                updated = true;
+            }
+
+            if (updated) {
+                showToast(`You have been added as a ${role} to this list!`, 'success');
+                // Reload the list to reflect changes
+                loadList(listId);
+            }
+        } else {
+            console.warn(`List ${listId} not found for shared access.`);
+        }
+    } catch (error) {
+        console.error('Error handling shared list access:', error);
+        showToast('Error joining shared list: ' + error.message, 'error');
+    }
+}
+
 function onUserSignedIn() {
     console.log('User signed in:', currentUser);
     try {
@@ -120,6 +252,9 @@ function onUserSignedIn() {
             // Load specific list from URL
             console.log('Loading specific list:', currentListId);
             loadList(currentListId);
+            if (currentListRole) {
+                handleSharedListAccess(currentListId, currentListRole);
+            }
         } else {
             // Show user's lists
             console.log('No specific list ID, showing list screen and loading user lists');
@@ -531,10 +666,10 @@ async function loadUserLists() {
         }
         
         console.log('Querying Firestore for lists owned by:', currentUser.email);
-        const listsQuery = firebaseDb.collection('lists')
+        const listsQuery = firebaseDb.collection('wishlists')
             .where('owner', '==', currentUser.email);
         
-        const collaboratorQuery = firebaseDb.collection('lists')
+        const collaboratorQuery = firebaseDb.collection('wishlists')
             .where('collaborators', 'array-contains', currentUser.email);
         
         console.log('Fetching lists from Firestore...');
@@ -630,7 +765,7 @@ async function createNewList() {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         
-        const docRef = await firebaseDb.collection('lists').add(listData);
+        const docRef = await firebaseDb.collection('wishlists').add(listData);
         currentListId = docRef.id;
         
         showToast('List created successfully!', 'success');
@@ -663,7 +798,7 @@ async function loadList(listId) {
         }
         
         console.log('Loading list with ID:', listId);
-        const listDoc = await firebaseDb.collection('lists').doc(listId).get();
+        const listDoc = await firebaseDb.collection('wishlists').doc(listId).get();
         
         if (!listDoc.exists) {
             console.log('List not found:', listId);
@@ -747,7 +882,7 @@ async function loadListItems(listId) {
         }
         
         console.log('Loading items for list:', listId);
-        const itemsQuery = firebaseDb.collection('lists').doc(listId)
+        const itemsQuery = firebaseDb.collection('wishlists').doc(listId)
             .collection('items').orderBy('position', 'asc');
         
         const snapshot = await itemsQuery.get();
@@ -1055,7 +1190,7 @@ async function deleteSelectedItems() {
     
     try {
         const batch = firebaseDb.batch();
-        const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+        const itemsRef = firebaseDb.collection('wishlists').doc(currentListId).collection('items');
         
         selectedItems.forEach(itemId => {
             batch.delete(itemsRef.doc(itemId));
@@ -1223,7 +1358,7 @@ async function markAsBought(itemId) {
     const buyerNote = prompt('Add a note (optional):') || '';
     
     try {
-        await firebaseDb.collection('lists').doc(currentListId)
+        await firebaseDb.collection('wishlists').doc(currentListId)
             .collection('items').doc(itemId).update({
                 bought: true,
                 buyerName: buyerName,
@@ -1244,7 +1379,7 @@ async function markAsNotBought(itemId) {
     }
     
     try {
-        await firebaseDb.collection('lists').doc(currentListId)
+        await firebaseDb.collection('wishlists').doc(currentListId)
             .collection('items').doc(itemId).update({
                 bought: false,
                 buyerName: firebase.firestore.FieldValue.delete(),
@@ -1497,7 +1632,11 @@ function populateUsersList(listId, users) {
     const listElement = document.getElementById(listId);
     listElement.innerHTML = '';
     
-    Object.entries(users).forEach(([uid, email]) => {
+    if (!Array.isArray(users)) {
+        users = Object.values(users || {});
+    }
+    
+    users.forEach(email => {
         const listItem = document.createElement('li');
         listItem.className = 'user-item';
         
@@ -1507,7 +1646,7 @@ function populateUsersList(listId, users) {
         const removeBtn = document.createElement('button');
         removeBtn.className = 'icon-button';
         removeBtn.innerHTML = '<i class="material-icons">close</i>';
-        removeBtn.addEventListener('click', () => removeUser(uid, listId === 'collaboratorsList' ? 'collaborators' : 'viewers'));
+        removeBtn.addEventListener('click', () => removeUser(email, listId === 'collaboratorsList' ? 'collaborators' : 'viewers'));
         
         listItem.appendChild(userEmail);
         listItem.appendChild(removeBtn);
@@ -1515,21 +1654,24 @@ function populateUsersList(listId, users) {
     });
 }
 
-function removeUser(uid, role) {
+function removeUser(emailToRemove, role) {
     if (!currentList || !currentListId) return;
     
-    const listRef = firebaseDb.collection('lists').doc(currentListId);
+    const listRef = firebaseDb.collection('wishlists').doc(currentListId);
     const updateData = {};
-    updateData[`${role}.${uid}`] = firebase.firestore.FieldValue.delete();
+    updateData[role] = firebase.firestore.FieldValue.arrayRemove(emailToRemove);
     
     listRef.update(updateData)
         .then(() => {
             showToast(`User removed from ${role}`, 'success');
             // Refresh the list in the modal
-            if (role === 'collaborators') {
-                populateUsersList('collaboratorsList', currentList.collaborators || {});
-            } else {
-                populateUsersList('viewersList', currentList.viewers || {});
+            return firebaseDb.collection('wishlists').doc(currentListId).get();
+        })
+        .then(doc => {
+            if (doc && doc.exists) {
+                currentList = { id: doc.id, ...doc.data() };
+                populateUsersList('collaboratorsList', currentList.collaborators || []);
+                populateUsersList('viewersList', currentList.viewers || []);
             }
         })
         .catch(error => {
@@ -1568,16 +1710,16 @@ function addUserToList(role) {
             const userData = user.data();
             
             // Don't add if it's the current user
-            if (userId === auth.currentUser.uid) {
+            if (userData.email === auth.currentUser.email) {
                 showToast('You cannot add yourself', 'error');
                 return;
             }
             
             // Update the list document
-            const listRef = firebaseDb.collection('lists').doc(currentListId);
+            const listRef = firebaseDb.collection('wishlists').doc(currentListId);
             const updateData = {};
             const rolePath = role === 'collaborator' ? 'collaborators' : 'viewers';
-            updateData[`${rolePath}.${userId}`] = userData.email;
+            updateData[rolePath] = firebase.firestore.FieldValue.arrayUnion(userData.email);
             
             return listRef.update(updateData);
         })
@@ -1590,10 +1732,10 @@ function addUserToList(role) {
         })
         .then(doc => {
             if (doc && doc.exists) {
-                currentList = doc.data();
+                currentList = { id: doc.id, ...doc.data() };
                 // Refresh the lists in the modal
-                populateUsersList('collaboratorsList', currentList.collaborators || {});
-                populateUsersList('viewersList', currentList.viewers || {});
+                populateUsersList('collaboratorsList', currentList.collaborators || []);
+                populateUsersList('viewersList', currentList.viewers || []);
             }
         })
         .catch(error => {
@@ -1615,7 +1757,7 @@ function saveListEdit() {
     const description = document.getElementById('editListDescription').value.trim();
     const eventDate = document.getElementById('editListEventDate').value;
     const isPublic = document.getElementById('editListPublic').checked;
-    const listRef = firebaseDb.collection('lists').doc(currentListId);
+    const listRef = firebaseDb.collection('wishlists').doc(currentListId);
     listRef.update({
         name,
         description,
@@ -2372,7 +2514,7 @@ async function importList() {
                         throw new Error('Invalid JSON format. Expected an array of items.');
                     }
 
-                    const listItemsCollectionRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+                    const listItemsCollectionRef = firebaseDb.collection('wishlists').doc(currentListId).collection('items');
 
                     // Get current position once, outside the loop
                     const currentSize = (await listItemsCollectionRef.get()).size;

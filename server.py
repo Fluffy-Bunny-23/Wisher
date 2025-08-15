@@ -20,6 +20,9 @@ from urllib.parse import urlparse
 # Global counter for request logs
 request_log_counter = 0
 
+# Clear screen
+os.system('cls' if os.name == 'nt' else 'clear')
+
 # Global variable to store header lines
 HEADER_LINES = []
 
@@ -68,11 +71,11 @@ class CORSHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         request_log_counter += 1
 
-        if request_log_counter % 20 == 0:
+        if request_log_counter % 5 == 0:
             os.system('cls' if os.name == 'nt' else 'clear')
             for line in HEADER_LINES:
                 print(line)
-            print("\n" + "-"*50 + "\n") # Add a separator
+            print("-"*50 + "\n") # Add a separator
 
         print(f"[{self.log_date_time_string()}] {format % args}")
 
