@@ -109,10 +109,6 @@ This is a complete, production-ready application. Feel free to:
 3. Submit pull requests
 4. Report issues
 
-## License
-
-MIT License - feel free to use this code for personal or commercial projects.
-
 ## Support
 
 For issues or questions:
@@ -124,11 +120,11 @@ For issues or questions:
 
 Potential future enhancements:
 
-- [ ] Amazon wishlist import functionality
+- [x] Amazon wishlist import functionality
 - [ ] Gift receipt storage system
 - [ ] Advanced tagging and filtering
 - [ ] Email notifications for purchases
 - [ ] Mobile app versions
-- [ ] Bulk item import/export
+- [x] Bulk item import
 - [ ] Advanced analytics and insights
 - [ ] Offline-first functionality
