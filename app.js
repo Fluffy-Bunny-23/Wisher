@@ -68,6 +68,8 @@ document.addEventListener('DOMContentLoaded', function() {
     setupAuthStateListener();
 });
 
+
+
 function initializeApp() {
     console.log('Initializing app');
     try {
@@ -82,8 +84,11 @@ function initializeApp() {
             currentListId = listId;
             // Store in localStorage for quick access
             localStorage.setItem('lastViewedList', listId);
+            // Persist pending shared link so it survives login redirects
+            localStorage.setItem('pendingSharedListId', listId);
             if (role) {
                 currentListRole = role; // Store the role globally
+                localStorage.setItem('pendingSharedListRole', role);
                 // Call a function to handle shared list access
                 handleSharedListAccess(listId, role);
             }
@@ -109,6 +114,7 @@ function initializeApp() {
         console.log('App initialization completed');
     } catch (error) {
         console.error('Error initializing app:', error);
+    }
 }
 
 function setupAuthStateListener() {
@@ -158,68 +164,57 @@ async function handleSharedListAccess(listId, role) {
     }
 
     try {
-        const listRef = firebase.firestore().collection('wishlists').doc(listId);
+        const listRef = firebaseDb.collection('lists').doc(listId);
         const doc = await listRef.get();
 
         if (doc.exists) {
             const listData = doc.data();
             const userEmail = currentUser.email;
 
-            let updated = false;
-            if (role === 'collaborator' && (!listData.collaborators || !listData.collaborators.includes(userEmail))) {
-                await listRef.update({
-                    collaborators: firebase.firestore.FieldValue.arrayUnion(userEmail)
-                });
-                console.log(`User ${userEmail} added as collaborator to list ${listId}`);
-                updated = true;
-            } else if (role === 'viewer' && (!listData.viewers || !listData.viewers.includes(userEmail))) {
-                await listRef.update({
-                    viewers: firebase.firestore.FieldValue.arrayUnion(userEmail)
-                });
-                console.log(`User ${userEmail} added as viewer to list ${listId}`);
-                updated = true;
-            }
+            const collaboratorsField = listData.collaborators || [];
+            const viewersField = listData.viewers || [];
 
-            if (updated) {
-                showToast(`You have been added as a ${role} to this list!`, 'success');
-                // Reload the list to reflect changes
-                loadList(listId);
-            }
-        } else {
-            console.warn(`List ${listId} not found for shared access.`);
-        }
-    } catch (error) {
-        console.error('Error handling shared list access:', error);
-        showToast('Error joining shared list: ' + error.message, 'error');
-    }
-}
-}
+            const isAlreadyCollaborator = Array.isArray(collaboratorsField)
+                ? collaboratorsField.includes(userEmail)
+                : (typeof collaboratorsField === 'object' && collaboratorsField !== null
+                    ? Object.values(collaboratorsField).includes(userEmail)
+                    : false);
 
-async function handleSharedListAccess(listId, role) {
-    if (!currentUser || !currentUser.email) {
-        console.warn('User not signed in, cannot handle shared list access yet.');
-        return; // Wait for user to sign in
-    }
-
-    try {
-        const listRef = firebase.firestore().collection('wishlists').doc(listId);
-        const doc = await listRef.get();
-
-        if (doc.exists) {
-            const listData = doc.data();
-            const userEmail = currentUser.email;
+            const isAlreadyViewer = Array.isArray(viewersField)
+                ? viewersField.includes(userEmail)
+                : (typeof viewersField === 'object' && viewersField !== null
+                    ? Object.values(viewersField).includes(userEmail)
+                    : false);
 
             let updated = false;
-            if (role === 'collaborator' && (!listData.collaborators || !listData.collaborators.includes(userEmail))) {
-                await listRef.update({
-                    collaborators: firebase.firestore.FieldValue.arrayUnion(userEmail)
-                });
+            if (role === 'collaborator' && !isAlreadyCollaborator) {
+                if (Array.isArray(collaboratorsField)) {
+                    await listRef.update({
+                        collaborators: firebase.firestore.FieldValue.arrayUnion(userEmail)
+                    });
+                } else {
+                    const uid = currentUser && currentUser.uid ? currentUser.uid : null;
+                    if (uid) {
+                        const updateData = {};
+                        updateData[`collaborators.${uid}`] = userEmail;
+                        await listRef.update(updateData);
+                    }
+                }
                 console.log(`User ${userEmail} added as collaborator to list ${listId}`);
                 updated = true;
-            } else if (role === 'viewer' && (!listData.viewers || !listData.viewers.includes(userEmail))) {
-                await listRef.update({
-                    viewers: firebase.firestore.FieldValue.arrayUnion(userEmail)
-                });
+            } else if (role === 'viewer' && !isAlreadyViewer) {
+                if (Array.isArray(viewersField)) {
+                    await listRef.update({
+                        viewers: firebase.firestore.FieldValue.arrayUnion(userEmail)
+                    });
+                } else {
+                    const uid = currentUser && currentUser.uid ? currentUser.uid : null;
+                    if (uid) {
+                        const updateData = {};
+                        updateData[`viewers.${uid}`] = userEmail;
+                        await listRef.update(updateData);
+                    }
+                }
                 console.log(`User ${userEmail} added as viewer to list ${listId}`);
                 updated = true;
             }
@@ -247,14 +242,31 @@ function onUserSignedIn() {
         document.getElementById('userEmail').textContent = currentUser.email;
         document.getElementById('userUid').textContent = currentUser.uid;
 
-        console.log('Checking for specific list ID in URL:', currentListId);
+        // Restore pending shared link data if not already set
+        if (!currentListId) {
+            const storedListId = localStorage.getItem('pendingSharedListId');
+            if (storedListId) {
+                currentListId = storedListId;
+            }
+        }
+        if (!currentListRole) {
+            const storedRole = localStorage.getItem('pendingSharedListRole');
+            if (storedRole) {
+                currentListRole = storedRole;
+            }
+        }
+
+        console.log('Checking for specific list ID in URL or storage:', currentListId);
         if (currentListId) {
-            // Load specific list from URL
+            // Load specific list from URL/storage
             console.log('Loading specific list:', currentListId);
             loadList(currentListId);
             if (currentListRole) {
                 handleSharedListAccess(currentListId, currentListRole);
             }
+            // Clear pending storage once processed
+            localStorage.removeItem('pendingSharedListId');
+            localStorage.removeItem('pendingSharedListRole');
         } else {
             // Show user's lists
             console.log('No specific list ID, showing list screen and loading user lists');
@@ -666,10 +678,10 @@ async function loadUserLists() {
         }
         
         console.log('Querying Firestore for lists owned by:', currentUser.email);
-        const listsQuery = firebaseDb.collection('wishlists')
+        const listsQuery = firebaseDb.collection('lists')
             .where('owner', '==', currentUser.email);
         
-        const collaboratorQuery = firebaseDb.collection('wishlists')
+        const collaboratorQuery = firebaseDb.collection('lists')
             .where('collaborators', 'array-contains', currentUser.email);
         
         console.log('Fetching lists from Firestore...');
@@ -765,7 +777,7 @@ async function createNewList() {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         
-        const docRef = await firebaseDb.collection('wishlists').add(listData);
+        const docRef = await firebaseDb.collection('lists').add(listData);
         currentListId = docRef.id;
         
         showToast('List created successfully!', 'success');
@@ -798,7 +810,7 @@ async function loadList(listId) {
         }
         
         console.log('Loading list with ID:', listId);
-        const listDoc = await firebaseDb.collection('wishlists').doc(listId).get();
+        const listDoc = await firebaseDb.collection('lists').doc(listId).get();
         
         if (!listDoc.exists) {
             console.log('List not found:', listId);
@@ -857,7 +869,14 @@ function displayList(list) {
     
     // Set up permissions
     const isOwner = currentUser && currentUser.email === list.owner;
-    const isCollaborator = currentUser && list.collaborators.includes(currentUser.email);
+    const collaboratorsField = list.collaborators || [];
+    const isCollaborator = currentUser && (
+        Array.isArray(collaboratorsField)
+            ? collaboratorsField.includes(currentUser.email)
+            : typeof collaboratorsField === 'object' && collaboratorsField !== null
+                ? Object.values(collaboratorsField).includes(currentUser.email)
+                : false
+    );
     const canEdit = isOwner || isCollaborator;
     
     document.getElementById('addItemBtn').style.display = canEdit ? 'flex' : 'none';
@@ -882,7 +901,7 @@ async function loadListItems(listId) {
         }
         
         console.log('Loading items for list:', listId);
-        const itemsQuery = firebaseDb.collection('wishlists').doc(listId)
+        const itemsQuery = firebaseDb.collection('lists').doc(listId)
             .collection('items').orderBy('position', 'asc');
         
         const snapshot = await itemsQuery.get();
@@ -960,7 +979,14 @@ function createItemCard(item, position) {
     card.dataset.itemId = item.id;
     
     const isOwner = currentUser && currentUser.email === currentList.owner;
-    const isCollaborator = currentUser && currentList.collaborators.includes(currentUser.email);
+    const collaboratorsField = currentList.collaborators || [];
+    const isCollaborator = currentUser && (
+        Array.isArray(collaboratorsField)
+            ? collaboratorsField.includes(currentUser.email)
+            : typeof collaboratorsField === 'object' && collaboratorsField !== null
+                ? Object.values(collaboratorsField).includes(currentUser.email)
+                : false
+    );
     const canEdit = isOwner || isCollaborator;
     
     // Create checkbox for multi-select
@@ -1174,7 +1200,14 @@ async function deleteSelectedItems() {
     if (selectedItems.length === 0) return;
     
     const isOwner = currentUser && currentUser.email === currentList.owner;
-    const isCollaborator = currentUser && currentList.collaborators.includes(currentUser.email);
+    const collaboratorsField = currentList.collaborators || [];
+    const isCollaborator = currentUser && (
+        Array.isArray(collaboratorsField)
+            ? collaboratorsField.includes(currentUser.email)
+            : typeof collaboratorsField === 'object' && collaboratorsField !== null
+                ? Object.values(collaboratorsField).includes(currentUser.email)
+                : false
+    );
     const canEdit = isOwner || isCollaborator;
     
     if (!canEdit) {
@@ -1190,7 +1223,7 @@ async function deleteSelectedItems() {
     
     try {
         const batch = firebaseDb.batch();
-        const itemsRef = firebaseDb.collection('wishlists').doc(currentListId).collection('items');
+        const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
         
         selectedItems.forEach(itemId => {
             batch.delete(itemsRef.doc(itemId));
@@ -1216,7 +1249,14 @@ function setupDragAndDrop() {
     if (container.children.length === 0) return;
     
     const isOwner = currentUser && currentUser.email === currentList.owner;
-    const isCollaborator = currentUser && currentList.collaborators.includes(currentUser.email);
+    const collaboratorsField = currentList.collaborators || [];
+    const isCollaborator = currentUser && (
+        Array.isArray(collaboratorsField)
+            ? collaboratorsField.includes(currentUser.email)
+            : typeof collaboratorsField === 'object' && collaboratorsField !== null
+                ? Object.values(collaboratorsField).includes(currentUser.email)
+                : false
+    );
     const canEdit = isOwner || isCollaborator;
     
     if (!canEdit) return;
@@ -1358,7 +1398,7 @@ async function markAsBought(itemId) {
     const buyerNote = prompt('Add a note (optional):') || '';
     
     try {
-        await firebaseDb.collection('wishlists').doc(currentListId)
+        await firebaseDb.collection('lists').doc(currentListId)
             .collection('items').doc(itemId).update({
                 bought: true,
                 buyerName: buyerName,
@@ -1379,7 +1419,7 @@ async function markAsNotBought(itemId) {
     }
     
     try {
-        await firebaseDb.collection('wishlists').doc(currentListId)
+        await firebaseDb.collection('lists').doc(currentListId)
             .collection('items').doc(itemId).update({
                 bought: false,
                 buyerName: firebase.firestore.FieldValue.delete(),
@@ -1657,7 +1697,7 @@ function populateUsersList(listId, users) {
 function removeUser(emailToRemove, role) {
     if (!currentList || !currentListId) return;
     
-    const listRef = firebaseDb.collection('wishlists').doc(currentListId);
+    const listRef = firebaseDb.collection('lists').doc(currentListId);
     const updateData = {};
     updateData[role] = firebase.firestore.FieldValue.arrayRemove(emailToRemove);
     
@@ -1665,7 +1705,7 @@ function removeUser(emailToRemove, role) {
         .then(() => {
             showToast(`User removed from ${role}`, 'success');
             // Refresh the list in the modal
-            return firebaseDb.collection('wishlists').doc(currentListId).get();
+            return firebaseDb.collection('lists').doc(currentListId).get();
         })
         .then(doc => {
             if (doc && doc.exists) {
@@ -1716,7 +1756,7 @@ function addUserToList(role) {
             }
             
             // Update the list document
-            const listRef = firebaseDb.collection('wishlists').doc(currentListId);
+            const listRef = firebaseDb.collection('lists').doc(currentListId);
             const updateData = {};
             const rolePath = role === 'collaborator' ? 'collaborators' : 'viewers';
             updateData[rolePath] = firebase.firestore.FieldValue.arrayUnion(userData.email);
@@ -1757,7 +1797,7 @@ function saveListEdit() {
     const description = document.getElementById('editListDescription').value.trim();
     const eventDate = document.getElementById('editListEventDate').value;
     const isPublic = document.getElementById('editListPublic').checked;
-    const listRef = firebaseDb.collection('wishlists').doc(currentListId);
+    const listRef = firebaseDb.collection('lists').doc(currentListId);
     listRef.update({
         name,
         description,
@@ -2514,7 +2554,7 @@ async function importList() {
                         throw new Error('Invalid JSON format. Expected an array of items.');
                     }
 
-                    const listItemsCollectionRef = firebaseDb.collection('wishlists').doc(currentListId).collection('items');
+                    const listItemsCollectionRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
 
                     // Get current position once, outside the loop
                     const currentSize = (await listItemsCollectionRef.get()).size;
@@ -2581,7 +2621,18 @@ async function importList() {
     };
 }
 async function deleteItem(itemId, itemName) {
-    if (!currentUser || !currentList || (!currentList.owner === currentUser.email && !currentList.collaborators.includes(currentUser.email))) {
+    const isOwner = currentUser && currentUser.email === currentList.owner;
+    const collaboratorsField = currentList.collaborators || [];
+    const isCollaborator = currentUser && (
+        Array.isArray(collaboratorsField)
+            ? collaboratorsField.includes(currentUser.email)
+            : typeof collaboratorsField === 'object' && collaboratorsField !== null
+                ? Object.values(collaboratorsField).includes(currentUser.email)
+                : false
+    );
+    const canEdit = isOwner || isCollaborator;
+
+    if (!currentUser || !currentList || !canEdit) {
         showToast('Only the list owner or a collaborator can delete items.', 'error');
         return;
     }
