@@ -285,6 +285,8 @@ function onUserSignedOut() {
     showScreen('authScreen');
     document.getElementById('loginButton').classList.remove('hidden');
     document.getElementById('userBtn').classList.add('hidden');
+    // Hide user profile modal if it's open
+    hideModal('userProfileModal');
     currentList = null;
     currentListId = null;
 }
@@ -357,7 +359,11 @@ function setupEventListeners() {
 
         const logoutButton = document.getElementById('logoutButton');
         if (logoutButton) {
-            logoutButton.addEventListener('click', signOut);
+            logoutButton.addEventListener('click', () => {
+                // Ensure the profile modal closes immediately on logout click
+                hideModal('userProfileModal');
+                signOut();
+            });
         } else {
             console.error('Element not found: logoutButton');
         }
