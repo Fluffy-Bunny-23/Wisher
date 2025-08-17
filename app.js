@@ -779,6 +779,7 @@ async function createNewList() {
             isPublic: false,
             collaboratorShareAccess: true,
             geminiApiKey: geminiApiKeyForList, // Store the API key with the list
+            ordered: true, // Default to ordered lists
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
@@ -1023,8 +1024,9 @@ function createItemCard(item, position) {
         }
     });
     
+    const showPosition = !currentList || currentList.ordered !== false;
     contentWrapper.innerHTML = `
-        <div class="item-position">${position}</div>
+        <div class="item-position" style="${showPosition ? '' : 'display:none;'}">${position}</div>
         <div class="item-header">
             <h3 class="item-title">${escapeHtml(item.name)}</h3>
             <div class="item-actions">
@@ -2326,6 +2328,7 @@ function showEditModal() {
     document.getElementById('editListDescription').value = currentList.description || '';
     document.getElementById('editListEventDate').value = currentList.eventDate || '';
     document.getElementById('editListPublic').checked = currentList.isPublic || false;
+    document.getElementById('editListOrdered').checked = currentList.ordered !== false;
     
     // Populate collaborators and viewers lists
     populateUsersList('collaboratorsList', currentList.collaborators || {});
@@ -2456,6 +2459,7 @@ function saveListEdit() {
     const description = document.getElementById('editListDescription').value.trim();
     const eventDate = document.getElementById('editListEventDate').value;
     const isPublic = document.getElementById('editListPublic').checked;
+    const ordered = document.getElementById('editListOrdered').checked;
     
     const listRef = firebaseDb.collection('lists').doc(currentListId);
     listRef.update({
@@ -2463,6 +2467,7 @@ function saveListEdit() {
         description,
         eventDate,
         isPublic,
+        ordered,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     })
     .then(() => {
@@ -2474,6 +2479,7 @@ function saveListEdit() {
         currentList.description = description;
         currentList.eventDate = eventDate;
         currentList.isPublic = isPublic;
+        currentList.ordered = ordered;
         
         // Update the list header
         document.getElementById('listTitle').textContent = name;
@@ -3080,6 +3086,7 @@ function showEditModal() {
     document.getElementById('editListDescription').value = currentList.description || '';
     document.getElementById('editListEventDate').value = currentList.eventDate || '';
     document.getElementById('editListPublic').checked = currentList.isPublic || false;
+    document.getElementById('editListOrdered').checked = currentList.ordered !== false;
     
     // Populate collaborators and viewers lists
     populateUsersList('collaboratorsList', currentList.collaborators || {});
@@ -3210,6 +3217,7 @@ function saveListEdit() {
     const description = document.getElementById('editListDescription').value.trim();
     const eventDate = document.getElementById('editListEventDate').value;
     const isPublic = document.getElementById('editListPublic').checked;
+    const ordered = document.getElementById('editListOrdered').checked;
     
     const listRef = firebaseDb.collection('lists').doc(currentListId);
     listRef.update({
@@ -3217,6 +3225,7 @@ function saveListEdit() {
         description,
         eventDate,
         isPublic,
+        ordered,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     })
     .then(() => {
@@ -3228,6 +3237,7 @@ function saveListEdit() {
         currentList.description = description;
         currentList.eventDate = eventDate;
         currentList.isPublic = isPublic;
+        currentList.ordered = ordered;
         
         // Update the list header
         document.getElementById('listTitle').textContent = name;
