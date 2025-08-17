@@ -513,6 +513,13 @@ input:checked + .slider:before {
   opacity: 1;
 }
 
+.item-card.indented {
+  margin-left: 40px;
+  margin-top: 8px;
+  border-left: 3px solid var(--primary-light);
+  background-color: #f8f9fa;
+}
+
 .item-content {
   display: grid;
   grid-template-columns: auto 1fr;

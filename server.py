@@ -76,6 +76,16 @@ class CORSHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         print(f"[{self.log_date_time_string()}] {format % args}")
 
+def is_port_in_use(port, host="127.0.0.1"):
+    """Return True if a TCP connection to host:port succeeds (port is in use)"""
+    import socket
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            return s.connect_ex((host, port)) == 0
+    except Exception:
+        return False
+
 def main():
     # Get port from command line argument or use default
     port = 8000
@@ -85,6 +95,11 @@ def main():
         except ValueError:
             print(f"Invalid port number: {sys.argv[1]}")
             print("Using default port 8000")
+    
+    # Abort if port already in use
+    if is_port_in_use(port):
+        print(f"Error: Port {port} is already in use. Another server appears to be running.", file=sys.stderr)
+        sys.exit(1)
     
     # Change to the directory containing this script
     script_dir = os.path.dirname(os.path.abspath(__file__))

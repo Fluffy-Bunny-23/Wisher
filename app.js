@@ -972,17 +972,56 @@ function displayItems(items) {
     document.getElementById('deselectAllBtn').addEventListener('click', deselectAllItems);
     document.getElementById('deleteSelectedBtn').addEventListener('click', deleteSelectedItems);
     
-    items.forEach((item, index) => {
+    // Create a map for quick item lookup
+    const itemMap = new Map();
+    items.forEach(item => itemMap.set(item.id, item));
+    
+    // Separate items into independent and reliant
+    const independentItems = items.filter(item => !item.reliantItemId);
+    const reliantItems = items.filter(item => item.reliantItemId);
+    
+    let displayIndex = 1;
+    
+    // Display independent items and their reliant children
+    independentItems.forEach(item => {
+        // Check if item should be displayed
         if (!showBoughtItems && item.bought) return;
         
-        const itemCard = createItemCard(item, index + 1);
+        const itemCard = createItemCard(item, displayIndex++);
         container.appendChild(itemCard);
+        
+        // Find and display reliant items for this parent
+        const childItems = reliantItems.filter(child => child.reliantItemId === item.id);
+        childItems.forEach(childItem => {
+            const shouldShowReliant = shouldDisplayReliantItem(item, childItem);
+            
+            if (shouldShowReliant) {
+                const childCard = createItemCard(childItem, displayIndex++, true); // true for indented
+                container.appendChild(childCard);
+            }
+        });
     });
 }
 
-function createItemCard(item, position) {
+function shouldDisplayReliantItem(parentItem, reliantItem) {
+    // For viewers: only show reliant items if parent is bought
+    if (currentListRole === 'viewer') {
+        return parentItem.bought;
+    }
+    
+    // For collaborators/owners: show based on showBoughtItems toggle
+    if (showBoughtItems) {
+        // Show all reliant items when toggle is on
+        return true;
+    } else {
+        // Show reliant items only if they're not bought (will be indented under parent)
+        return !reliantItem.bought;
+    }
+}
+
+function createItemCard(item, position, isIndented = false) {
     const card = document.createElement('div');
-    card.className = `item-card ${item.bought ? 'bought' : ''} ${selectedItems.includes(item.id) ? 'selected' : ''}`;
+    card.className = `item-card ${item.bought ? 'bought' : ''} ${selectedItems.includes(item.id) ? 'selected' : ''} ${isIndented ? 'indented' : ''}`;
     card.dataset.itemId = item.id;
     
     const isOwner = currentUser && currentUser.email === currentList.owner;
@@ -1293,6 +1332,22 @@ function setupDragAndDrop() {
 }
 
 // Item management functions
+function populateReliantDropdown(excludeItemId = null) {
+    const reliantSelect = document.getElementById('itemReliant');
+    reliantSelect.innerHTML = '<option value="">None - Independent item</option>';
+    
+    if (currentList && currentList.items) {
+        Object.entries(currentList.items).forEach(([itemId, item]) => {
+            if (itemId !== excludeItemId) {
+                const option = document.createElement('option');
+                option.value = itemId;
+                option.textContent = item.name;
+                reliantSelect.appendChild(option);
+            }
+        });
+    }
+}
+
 function showAddItemModal() {
     document.getElementById('itemModalTitle').textContent = 'Add Item';
     document.getElementById('itemForm').reset();
@@ -1301,6 +1356,9 @@ function showAddItemModal() {
     // Clear description and notes fields
     document.getElementById('itemDescription').value = '';
     document.getElementById('itemNotes').value = '';
+    
+    // Populate reliant dropdown
+    populateReliantDropdown();
 
     const itemNameInput = document.getElementById('itemName');
     let typingTimer;
@@ -1351,6 +1409,9 @@ function editItem(itemId) {
                 // Set modal title
                 document.getElementById('itemModalTitle').textContent = 'Edit Item';
                 
+                // Populate reliant dropdown (exclude current item)
+                populateReliantDropdown(itemId);
+                
                 // Populate form fields
                 document.getElementById('itemName').value = item.name || '';
                 document.getElementById('itemURL').value = item.url || '';
@@ -1359,6 +1420,8 @@ function editItem(itemId) {
                 document.getElementById('itemNotes').value = item.notes || '';
                 document.getElementById('itemPrice').value = item.price || '';
                 document.getElementById('itemPosition').value = item.position || '';
+                document.getElementById('itemReliant').value = item.reliantItemId || '';
+                document.getElementById('itemGroup').checked = item.isGroup || false;
                 
                 // Show the modal
                 showModal('itemModal');
@@ -1406,15 +1469,60 @@ async function markAsBought(itemId) {
     const buyerNote = prompt('Add a note (optional):') || '';
     
     try {
+        // Get the current item to check if it's part of a group
+        const itemDoc = await firebaseDb.collection('lists').doc(currentListId)
+            .collection('items').doc(itemId).get();
+        
+        if (!itemDoc.exists) {
+            showToast('Item not found', 'error');
+            return;
+        }
+        
+        const item = itemDoc.data();
+        const updateData = {
+            bought: true,
+            buyerName: buyerName,
+            buyerEmail: buyerEmail,
+            buyerNote: buyerNote,
+            datePurchased: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        // Update the current item
         await firebaseDb.collection('lists').doc(currentListId)
-            .collection('items').doc(itemId).update({
-                bought: true,
-                buyerName: buyerName,
-                buyerEmail: buyerEmail,
-                buyerNote: buyerNote,
-                datePurchased: firebase.firestore.FieldValue.serverTimestamp()
+            .collection('items').doc(itemId).update(updateData);
+        
+        // If this item is part of a group, mark all items in the group as bought
+        if (item.isGroup) {
+            const allItemsSnapshot = await firebaseDb.collection('lists').doc(currentListId)
+                .collection('items').get();
+            
+            const batch = firebaseDb.batch();
+            let groupItemsCount = 0;
+            
+            allItemsSnapshot.docs.forEach(doc => {
+                const docData = doc.data();
+                // Find all items that are part of this group (same reliantItemId or same item if it's the parent)
+                if ((docData.reliantItemId === itemId || doc.id === itemId || 
+                     (item.reliantItemId && docData.reliantItemId === item.reliantItemId) ||
+                     (item.reliantItemId && doc.id === item.reliantItemId)) && !docData.bought) {
+                    
+                    const itemRef = firebaseDb.collection('lists').doc(currentListId)
+                        .collection('items').doc(doc.id);
+                    batch.update(itemRef, updateData);
+                    groupItemsCount++;
+                }
             });
-        showToast('Item marked as bought!', 'success');
+            
+            if (groupItemsCount > 0) {
+                await batch.commit();
+                showToast(`Group of ${groupItemsCount + 1} items marked as bought!`, 'success');
+            } else {
+                showToast('Item marked as bought!', 'success');
+            }
+        } else {
+            showToast('Item marked as bought!', 'success');
+        }
+        
         loadListItems(currentListId);
     } catch (error) {
         showToast('Error marking item as bought: ' + error.message, 'error');
@@ -1456,6 +1564,8 @@ async function saveItem() {
         price: document.getElementById('itemPrice').value || null,
         position: (await firebaseDb.collection('lists').doc(currentListId).collection('items').get()).size + 1,
         bought: false,
+        reliantItemId: document.getElementById('itemReliant').value || null,
+        isGroup: document.getElementById('itemGroup').checked,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };

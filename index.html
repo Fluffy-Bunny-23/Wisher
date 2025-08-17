@@ -181,6 +181,24 @@
                         <label for="itemPosition">Position</label>
                         <input type="number" id="itemPosition" min="1">
                     </div>
+                    
+                    <div class="input-group">
+                        <label for="itemReliant">Reliant Item</label>
+                        <select id="itemReliant">
+                            <option value="">None - Independent item</option>
+                            <!-- Options will be populated dynamically -->
+                        </select>
+                        <small>This item will only show when the selected item is bought</small>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="itemGroup">Group Behavior</label>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="itemGroup">
+                            <label for="itemGroup">Mark entire group as bought when this item is purchased</label>
+                        </div>
+                        <small>When enabled, buying this item will mark all related items as bought</small>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
