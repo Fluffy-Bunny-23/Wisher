@@ -117,6 +117,10 @@
                         <span class="material-icons">add</span>
                         Add Item
                     </button>
+                    <button class="btn btn-secondary" id="addGroupBtn">
+                        <span class="material-icons">folder_open</span>
+                        Add Group
+                    </button>
                     <button class="btn btn-secondary" id="manageListBtn">
                         <span class="material-icons">edit</span>
                         Manage List
@@ -183,27 +187,80 @@
                     </div>
                     
                     <div class="input-group">
-                        <label for="itemReliant">Reliant Item</label>
-                        <select id="itemReliant">
-                            <option value="">None - Independent item</option>
-                            <!-- Options will be populated dynamically -->
+                        <label for="itemGroup">Group (Optional)</label>
+                        <select id="itemGroup">
+                            <option value="">No Group</option>
                         </select>
-                        <small>This item will only show when the selected item is bought</small>
-                    </div>
-                    
-                    <div class="input-group">
-                        <label for="itemGroup">Group Behavior</label>
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="itemGroup">
-                            <label for="itemGroup">Mark entire group as bought when this item is purchased</label>
-                        </div>
-                        <small>When enabled, buying this item will mark all related items as bought</small>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-text" id="cancelItemBtn">Cancel</button>
                 <button class="btn btn-primary" id="saveItemBtn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Group Modal -->
+    <div id="groupModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="groupModalTitle">Add Group</h3>
+                <button class="icon-button modal-close">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="groupForm">
+                    <div class="input-group">
+                        <label for="groupName">Group Name *</label>
+                        <input type="text" id="groupName" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="groupImageURL">Image URL (Optional)</label>
+                        <input type="url" id="groupImageURL" placeholder="https://...">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="groupDescription">Description</label>
+                        <textarea id="groupDescription" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="groupNotes">Notes</label>
+                        <textarea id="groupNotes" rows="3"></textarea>
+                    </div>
+
+                    <!-- Conditional Visibility Options -->
+                    <div class="input-group">
+                        <label class="checkbox-group">
+                            <input type="checkbox" id="groupConditionalVisibility">
+                            <span class="checkmark"></span>
+                            Only show this group when a specific item is bought
+                        </label>
+                    </div>
+
+                    <div id="conditionalItemSelector" class="input-group conditional-options" style="display: none;">
+                        <label for="groupTriggerItem">Show when this item is bought:</label>
+                        <select id="groupTriggerItem">
+                            <option value="">Select an item...</option>
+                        </select>
+                    </div>
+
+                    <!-- Auto-buy Options -->
+                    <div class="input-group">
+                        <label class="checkbox-group">
+                            <input type="checkbox" id="groupAutoBuy">
+                            <span class="checkmark"></span>
+                            Mark entire group as bought when any item in it is purchased
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-text" id="cancelGroupBtn">Cancel</button>
+                <button class="btn btn-primary" id="saveGroupBtn">Save</button>
             </div>
         </div>
     </div>
@@ -423,6 +480,36 @@
             <div class="modal-footer">
                 <button class="btn btn-primary" id="confirmImportAiSettingsBtn">Continue to Import</button>
                 <button class="btn btn-secondary modal-close">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Buy Modal -->
+    <div id="buyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Confirm Purchase</h3>
+                <button class="icon-button modal-close">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label for="buyerNameInput">Your Name *</label>
+                    <input type="text" id="buyerNameInput" required>
+                </div>
+                <div class="input-group">
+                    <label for="buyerEmailInput">Email (optional)</label>
+                    <input type="email" id="buyerEmailInput" placeholder="you@example.com">
+                </div>
+                <div class="input-group">
+                    <label for="buyerNoteInput">Note (optional)</label>
+                    <textarea id="buyerNoteInput" rows="3" placeholder="Add a note for the list owner"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-text" id="cancelBuyBtn" onclick="hideModal('buyModal')">Cancel</button>
+                <button class="btn btn-primary" id="confirmBuyBtn" onclick="confirmBuy()">Confirm Purchase</button>
             </div>
         </div>
     </div>

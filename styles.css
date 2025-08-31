@@ -513,13 +513,6 @@ input:checked + .slider:before {
   opacity: 1;
 }
 
-.item-card.indented {
-  margin-left: 40px;
-  margin-top: 8px;
-  border-left: 3px solid var(--primary-light);
-  background-color: #f8f9fa;
-}
-
 .item-content {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1130,4 +1123,45 @@ input:checked + .slider:before {
     padding-top: 20px;
     border-top: 1px solid #eee;
     justify-content: flex-end;
+}
+
+/* Grouped rendering styles */
+.group-container {
+  margin-bottom: 24px;
+  border-radius: 12px;
+  background: var(--surface-color);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  padding-bottom: 8px;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.group-header .group-image {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--background-color);
+}
+
+.group-header .group-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.group-header .group-description {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* Ensure item cards within a group have appropriate spacing */
+.group-container .item-card {
+  margin: 12px 16px;
 }

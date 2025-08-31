@@ -383,6 +383,13 @@ function setupEventListeners() {
             console.error('Element not found: addItemBtn');
         }
         
+        const addGroupBtn = document.getElementById('addGroupBtn');
+        if (addGroupBtn) {
+            addGroupBtn.addEventListener('click', () => showAddGroupModal());
+        } else {
+            console.error('Element not found: addGroupBtn');
+        }
+        
         const manageListBtn = document.getElementById('manageListBtn');
         if (manageListBtn) {
             manageListBtn.addEventListener('click', () => showEditModal());
@@ -432,6 +439,21 @@ function setupEventListeners() {
         
         } else {
             console.error('Element not found: saveEditBtn');
+        }
+
+        // Group modal buttons
+        const saveGroupBtn = document.getElementById('saveGroupBtn');
+        if (saveGroupBtn) {
+            saveGroupBtn.addEventListener('click', saveGroup);
+        } else {
+            console.error('Element not found: saveGroupBtn');
+        }
+
+        const cancelGroupBtn = document.getElementById('cancelGroupBtn');
+        if (cancelGroupBtn) {
+            cancelGroupBtn.addEventListener('click', () => hideModal('groupModal'));
+        } else {
+            console.error('Element not found: cancelGroupBtn');
         }
         
         const cancelEditBtn = document.getElementById('cancelEditBtn');
@@ -907,19 +929,27 @@ async function loadListItems(listId) {
             return;
         }
         
-        console.log('Loading items for list:', listId);
-        const itemsQuery = firebaseDb.collection('lists').doc(listId)
-            .collection('items').orderBy('position', 'asc');
+        console.log('Loading items and groups for list:', listId);
         
-        const snapshot = await itemsQuery.get();
+        // Fetch both items and groups in parallel
+        const [itemsSnapshot, groupsSnapshot] = await Promise.all([
+            firebaseDb.collection('lists').doc(listId).collection('items').orderBy('position', 'asc').get(),
+            firebaseDb.collection('lists').doc(listId).collection('groups').get()
+        ]);
+        
         const items = [];
+        const groups = {};
         
-        snapshot.forEach(doc => {
+        itemsSnapshot.forEach(doc => {
             items.push({ id: doc.id, ...doc.data() });
         });
         
-        console.log(`Loaded ${items.length} items for list ${listId}`);
-        displayItems(items);
+        groupsSnapshot.forEach(doc => {
+            groups[doc.id] = { id: doc.id, ...doc.data() };
+        });
+        
+        console.log(`Loaded ${items.length} items and ${Object.keys(groups).length} groups for list ${listId}`);
+        displayItems(items, groups);
         setupDragAndDrop();
         clearTimeout(safetyTimeout);
     } catch (error) {
@@ -929,15 +959,15 @@ async function loadListItems(listId) {
     }
 }
 
-function displayItems(items) {
+function displayItems(items, groups = {}) {
     const container = document.getElementById('itemsContainer');
     container.innerHTML = '';
-    
+
     // Reset selected items when redisplaying
     selectedItems = [];
     lastSelectedItemId = null;
     updateSelectionActionBar();
-    
+
     if (items.length === 0) {
         container.innerHTML = `
             <div class="text-center">
@@ -946,7 +976,7 @@ function displayItems(items) {
         `;
         return;
     }
-    
+
     // Create selection action bar
     const selectionActionBar = document.createElement('div');
     selectionActionBar.id = 'selectionActionBar';
@@ -967,61 +997,112 @@ function displayItems(items) {
         </div>
     `;
     container.appendChild(selectionActionBar);
-    
+
     // Add event listeners for action bar buttons
     document.getElementById('deselectAllBtn').addEventListener('click', deselectAllItems);
     document.getElementById('deleteSelectedBtn').addEventListener('click', deleteSelectedItems);
-    
-    // Create a map for quick item lookup
-    const itemMap = new Map();
-    items.forEach(item => itemMap.set(item.id, item));
-    
-    // Separate items into independent and reliant
-    const independentItems = items.filter(item => !item.reliantItemId);
-    const reliantItems = items.filter(item => item.reliantItemId);
-    
-    let displayIndex = 1;
-    
-    // Display independent items and their reliant children
-    independentItems.forEach(item => {
-        // Check if item should be displayed
-        if (!showBoughtItems && item.bought) return;
-        
-        const itemCard = createItemCard(item, displayIndex++);
-        container.appendChild(itemCard);
-        
-        // Find and display reliant items for this parent
-        const childItems = reliantItems.filter(child => child.reliantItemId === item.id);
-        childItems.forEach(childItem => {
-            const shouldShowReliant = shouldDisplayReliantItem(item, childItem);
-            
-            if (shouldShowReliant) {
-                const childCard = createItemCard(childItem, displayIndex++, true); // true for indented
-                container.appendChild(childCard);
-            }
+
+    // Prepare grouping
+    const groupsMap = groups || {};
+    const itemsByGroup = {};
+    const ungroupedItems = [];
+
+    items.forEach(item => {
+        if (!showBoughtItems && item.bought) return; // respect bought toggle
+        const gid = item.groupId || '';
+        if (!gid) {
+            ungroupedItems.push(item);
+        } else {
+            if (!itemsByGroup[gid]) itemsByGroup[gid] = [];
+            itemsByGroup[gid].push(item);
+        }
+    });
+
+    // Build a map of triggerItemId -> [groupIds] to attach groups near their trigger item
+    const triggerToGroups = {};
+    Object.keys(groupsMap).forEach(gid => {
+        const g = groupsMap[gid];
+        if (g && g.triggerItemId) {
+            if (!triggerToGroups[g.triggerItemId]) triggerToGroups[g.triggerItemId] = [];
+            triggerToGroups[g.triggerItemId].push(gid);
+        }
+    });
+
+    const renderedGroups = new Set();
+
+    function isGroupVisible(group) {
+        if (!group) return true;
+        if (group.conditionalVisibility && group.triggerItemId) {
+            const triggerItem = items.find(it => it.id === group.triggerItemId);
+            return !!(triggerItem && triggerItem.bought);
+        }
+        return true;
+    }
+
+    function renderGroupBlock(groupId) {
+        if (renderedGroups.has(groupId)) return;
+        const group = groupsMap[groupId];
+        const groupItems = itemsByGroup[groupId] || [];
+        if (!isGroupVisible(group)) return; // respect conditional visibility
+
+        // Group container
+        const groupContainer = document.createElement('div');
+        groupContainer.className = 'group-container';
+        groupContainer.dataset.groupId = groupId;
+
+        // Group header
+        const header = document.createElement('div');
+        header.className = 'group-header';
+        const groupImg = group && group.imageUrl ? `<img src="${group.imageUrl}" alt="${escapeHtml(group.name || 'Group')}" class="group-image" onerror="this.style.display='none'">` : '';
+        header.innerHTML = `
+            ${groupImg}
+            <div class="group-header-text">
+                <h3 class="group-title">${escapeHtml(group && group.name ? group.name : 'Group')}</h3>
+                ${group && group.description ? `<p class="group-description">${escapeHtml(group.description)}</p>` : ''}
+            </div>
+        `;
+        groupContainer.appendChild(header);
+
+        // Group items
+        groupItems.forEach((item, idx) => {
+            const itemCard = createItemCard(item, idx + 1);
+            groupContainer.appendChild(itemCard);
         });
+
+        container.appendChild(groupContainer);
+        renderedGroups.add(groupId);
+    }
+
+    // Render ungrouped items first; attach any groups triggered by each item directly after
+    if (ungroupedItems.length > 0) {
+        ungroupedItems.forEach((item, idx) => {
+            const itemCard = createItemCard(item, idx + 1);
+            container.appendChild(itemCard);
+
+            const groupsTriggered = triggerToGroups[item.id] || [];
+            groupsTriggered.forEach(gid => {
+                const g = groupsMap[gid];
+                // If conditional is off, always attach; if on, attach only when visible (trigger item bought)
+                if (!g || !g.conditionalVisibility || isGroupVisible(g)) {
+                    renderGroupBlock(gid);
+                }
+            });
+        });
+    }
+
+    // Render any remaining groups not yet rendered (e.g., groups without triggers or triggers not currently in view)
+    Object.keys(itemsByGroup).forEach(groupId => {
+        if (renderedGroups.has(groupId)) return;
+        const group = groupsMap[groupId];
+        if (isGroupVisible(group)) {
+            renderGroupBlock(groupId);
+        }
     });
 }
 
-function shouldDisplayReliantItem(parentItem, reliantItem) {
-    // For viewers: only show reliant items if parent is bought
-    if (currentListRole === 'viewer') {
-        return parentItem.bought;
-    }
-    
-    // For collaborators/owners: show based on showBoughtItems toggle
-    if (showBoughtItems) {
-        // Show all reliant items when toggle is on
-        return true;
-    } else {
-        // Show reliant items only if they're not bought (will be indented under parent)
-        return !reliantItem.bought;
-    }
-}
-
-function createItemCard(item, position, isIndented = false) {
+function createItemCard(item, position) {
     const card = document.createElement('div');
-    card.className = `item-card ${item.bought ? 'bought' : ''} ${selectedItems.includes(item.id) ? 'selected' : ''} ${isIndented ? 'indented' : ''}`;
+    card.className = `item-card ${item.bought ? 'bought' : ''} ${selectedItems.includes(item.id) ? 'selected' : ''}`;
     card.dataset.itemId = item.id;
     
     const isOwner = currentUser && currentUser.email === currentList.owner;
@@ -1331,23 +1412,45 @@ function setupDragAndDrop() {
     });
 }
 
-// Item management functions
-function populateReliantDropdown(excludeItemId = null) {
-    const reliantSelect = document.getElementById('itemReliant');
-    reliantSelect.innerHTML = '<option value="">None - Independent item</option>';
-    
-    if (currentList && currentList.items) {
-        Object.entries(currentList.items).forEach(([itemId, item]) => {
-            if (itemId !== excludeItemId) {
-                const option = document.createElement('option');
-                option.value = itemId;
-                option.textContent = item.name;
-                reliantSelect.appendChild(option);
-            }
-        });
+// Function to populate the group selector in the item modal
+function populateGroupSelector() {
+    const groupSelect = document.getElementById('itemGroup');
+    if (!groupSelect) {
+        console.error('Group select element not found');
+        return;
     }
+
+    // Clear existing options except the default
+    groupSelect.innerHTML = '<option value="">No Group</option>';
+
+    if (!currentListId) {
+        console.log('No current list ID, cannot populate group selector');
+        return;
+    }
+
+    // Fetch groups from Firestore
+    firebaseDb.collection('lists').doc(currentListId).collection('groups')
+        .get()
+        .then(snapshot => {
+            if (snapshot.empty) {
+                console.log('No groups found for this list');
+                return;
+            }
+
+            snapshot.forEach(doc => {
+                const group = doc.data();
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = group.name || 'Unnamed Group';
+                groupSelect.appendChild(option);
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching groups:', error);
+        });
 }
 
+// Item management functions
 function showAddItemModal() {
     document.getElementById('itemModalTitle').textContent = 'Add Item';
     document.getElementById('itemForm').reset();
@@ -1356,9 +1459,9 @@ function showAddItemModal() {
     // Clear description and notes fields
     document.getElementById('itemDescription').value = '';
     document.getElementById('itemNotes').value = '';
-    
-    // Populate reliant dropdown
-    populateReliantDropdown();
+
+    // Populate group selector
+    populateGroupSelector();
 
     const itemNameInput = document.getElementById('itemName');
     let typingTimer;
@@ -1394,6 +1497,120 @@ function showAddItemModal() {
     showModal('itemModal');
 }
 
+// Group management functions
+function showAddGroupModal() {
+    const groupForm = document.getElementById('groupForm');
+    if (!groupForm) {
+        console.error('Group form not found');
+        return;
+    }
+    document.getElementById('groupModalTitle').textContent = 'Add Group';
+    groupForm.reset();
+    groupForm.dataset.mode = 'add';
+    delete groupForm.dataset.groupId;
+
+    const conditionalItemSelector = document.getElementById('conditionalItemSelector');
+    const conditionalCheckbox = document.getElementById('groupConditionalVisibility');
+
+    if (conditionalItemSelector && conditionalCheckbox) {
+        // Initialize visibility
+        conditionalItemSelector.style.display = conditionalCheckbox.checked ? 'block' : 'none';
+        // Set up change handler (replace previous to avoid duplicates)
+        conditionalCheckbox.onchange = function() {
+            if (this.checked) {
+                conditionalItemSelector.style.display = 'block';
+                populateItemSelector();
+            } else {
+                conditionalItemSelector.style.display = 'none';
+            }
+        };
+    }
+
+    // Populate items for trigger selector
+    populateItemSelector();
+
+    showModal('groupModal');
+}
+
+function populateItemSelector() {
+    try {
+        const selector = document.getElementById('groupTriggerItem');
+        if (!selector) return;
+        selector.innerHTML = '<option value="">Select an item...</option>';
+        if (!currentListId) return;
+        firebaseDb.collection('lists').doc(currentListId).collection('items')
+            .orderBy('position')
+            .get()
+            .then(snapshot => {
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const opt = document.createElement('option');
+                    opt.value = doc.id;
+                    opt.textContent = data.name || 'Untitled';
+                    selector.appendChild(opt);
+                });
+            })
+            .catch(err => console.error('Error populating item selector:', err));
+    } catch (e) {
+        console.error('populateItemSelector error:', e);
+    }
+}
+
+async function saveGroup() {
+    const name = document.getElementById('groupName').value.trim();
+    const imageUrl = document.getElementById('groupImageURL').value.trim();
+    const description = document.getElementById('groupDescription').value.trim();
+    const notes = document.getElementById('groupNotes').value.trim();
+    const conditional = document.getElementById('groupConditionalVisibility').checked;
+    const triggerItemId = document.getElementById('groupTriggerItem').value || null;
+    const autoBuy = document.getElementById('groupAutoBuy').checked;
+
+    if (!name) {
+        showToast('Group name is required', 'error');
+        return;
+    }
+    if (conditional && !triggerItemId) {
+        showToast('Please select a trigger item for conditional visibility', 'error');
+        return;
+    }
+
+    try {
+        showLoading();
+        const groupData = {
+            name,
+            imageUrl: imageUrl || null,
+            description: description || null,
+            notes: notes || null,
+            conditionalVisibility: conditional || false,
+            triggerItemId: conditional ? triggerItemId : null,
+            autoBuy: autoBuy || false,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        const groupRef = firebaseDb.collection('lists').doc(currentListId).collection('groups');
+
+        const form = document.getElementById('groupForm');
+        if (form.dataset.mode === 'edit' && form.dataset.groupId) {
+            const { createdAt, ...updateData } = groupData;
+            await groupRef.doc(form.dataset.groupId).update(updateData);
+            showToast('Group updated!', 'success');
+        } else {
+            await groupRef.add(groupData);
+            showToast('Group added!', 'success');
+        }
+
+        hideModal('groupModal');
+        // Refresh items view (groups rendering to be added in next steps)
+        await loadListItems(currentListId);
+    } catch (err) {
+        console.error('Error saving group:', err);
+        showToast('Error saving group: ' + err.message, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
 function editItem(itemId) {
     // Find item in current list and load it into the edit modal
     const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
@@ -1409,9 +1626,6 @@ function editItem(itemId) {
                 // Set modal title
                 document.getElementById('itemModalTitle').textContent = 'Edit Item';
                 
-                // Populate reliant dropdown (exclude current item)
-                populateReliantDropdown(itemId);
-                
                 // Populate form fields
                 document.getElementById('itemName').value = item.name || '';
                 document.getElementById('itemURL').value = item.url || '';
@@ -1420,8 +1634,17 @@ function editItem(itemId) {
                 document.getElementById('itemNotes').value = item.notes || '';
                 document.getElementById('itemPrice').value = item.price || '';
                 document.getElementById('itemPosition').value = item.position || '';
-                document.getElementById('itemReliant').value = item.reliantItemId || '';
-                document.getElementById('itemGroup').checked = item.isGroup || false;
+                
+                // Populate group selector and preselect current group
+                populateGroupSelector();
+                
+                // Set group selection after async population
+                setTimeout(() => {
+                    const groupSelect = document.getElementById('itemGroup');
+                    if (groupSelect && item.groupId) {
+                        groupSelect.value = item.groupId;
+                    }
+                }, 100);
                 
                 // Show the modal
                 showModal('itemModal');
@@ -1462,14 +1685,73 @@ function openItemLink(url) {
 }
 
 async function markAsBought(itemId) {
-    const buyerName = prompt('Enter your name:');
-    if (!buyerName) return;
-    
-    const buyerEmail = prompt('Enter your email (optional):') || '';
-    const buyerNote = prompt('Add a note (optional):') || '';
-    
+    // Open modal-based flow instead of prompt-based
+    showBuyModal(itemId);
+}
+
+function showBuyModal(itemId) {
+    const modal = document.getElementById('buyModal');
+    if (!modal) {
+        showToast('Buy modal not found', 'error');
+        return;
+    }
+    // Store the itemId on the modal element
+    modal.dataset.itemId = itemId;
+
+    // Prefill inputs if possible
+    const nameInput = document.getElementById('buyerNameInput');
+    const emailInput = document.getElementById('buyerEmailInput');
+    const noteInput = document.getElementById('buyerNoteInput');
+
+    if (nameInput) {
+        const fallbackName = currentUser && (currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : ''));
+        nameInput.value = fallbackName || '';
+        nameInput.focus();
+    }
+    if (emailInput) {
+        emailInput.value = (currentUser && currentUser.email) ? currentUser.email : '';
+    }
+    if (noteInput) {
+        noteInput.value = '';
+    }
+
+    showModal('buyModal');
+}
+
+async function confirmBuy() {
+    const modal = document.getElementById('buyModal');
+    const itemId = modal && modal.dataset ? modal.dataset.itemId : null;
+
+    const nameInput = document.getElementById('buyerNameInput');
+    const emailInput = document.getElementById('buyerEmailInput');
+    const noteInput = document.getElementById('buyerNoteInput');
+
+    const buyerName = nameInput ? nameInput.value.trim() : '';
+    const buyerEmail = emailInput ? emailInput.value.trim() : '';
+    const buyerNote = noteInput ? noteInput.value.trim() : '';
+
+    if (!itemId) {
+        showToast('No item selected for purchase', 'error');
+        return;
+    }
+    if (!buyerName) {
+        showToast('Please enter your name to confirm purchase', 'error');
+        if (nameInput) nameInput.focus();
+        return;
+    }
+
     try {
-        // Get the current item to check if it's part of a group
+        await performBuy(itemId, buyerName, buyerEmail, buyerNote);
+        hideModal('buyModal');
+    } catch (err) {
+        // performBuy already shows a toast; keep modal open for correction
+        console.error('Confirm buy error:', err);
+    }
+}
+
+async function performBuy(itemId, buyerName, buyerEmail, buyerNote) {
+    try {
+        // First, get the item to check its group
         const itemDoc = await firebaseDb.collection('lists').doc(currentListId)
             .collection('items').doc(itemId).get();
         
@@ -1479,43 +1761,53 @@ async function markAsBought(itemId) {
         }
         
         const item = itemDoc.data();
-        const updateData = {
-            bought: true,
-            buyerName: buyerName,
-            buyerEmail: buyerEmail,
-            buyerNote: buyerNote,
-            datePurchased: firebase.firestore.FieldValue.serverTimestamp()
-        };
         
-        // Update the current item
+        // Mark the current item as bought
         await firebaseDb.collection('lists').doc(currentListId)
-            .collection('items').doc(itemId).update(updateData);
-        
-        // If this item is part of a group, mark all items in the group as bought
-        if (item.isGroup) {
-            const allItemsSnapshot = await firebaseDb.collection('lists').doc(currentListId)
-                .collection('items').get();
-            
-            const batch = firebaseDb.batch();
-            let groupItemsCount = 0;
-            
-            allItemsSnapshot.docs.forEach(doc => {
-                const docData = doc.data();
-                // Find all items that are part of this group (same reliantItemId or same item if it's the parent)
-                if ((docData.reliantItemId === itemId || doc.id === itemId || 
-                     (item.reliantItemId && docData.reliantItemId === item.reliantItemId) ||
-                     (item.reliantItemId && doc.id === item.reliantItemId)) && !docData.bought) {
-                    
-                    const itemRef = firebaseDb.collection('lists').doc(currentListId)
-                        .collection('items').doc(doc.id);
-                    batch.update(itemRef, updateData);
-                    groupItemsCount++;
-                }
+            .collection('items').doc(itemId).update({
+                bought: true,
+                buyerName: buyerName,
+                buyerEmail: buyerEmail,
+                buyerNote: buyerNote,
+                datePurchased: firebase.firestore.FieldValue.serverTimestamp()
             });
+        
+        // Check if item belongs to a group with auto-buy enabled
+        if (item.groupId) {
+            const groupDoc = await firebaseDb.collection('lists').doc(currentListId)
+                .collection('groups').doc(item.groupId).get();
             
-            if (groupItemsCount > 0) {
-                await batch.commit();
-                showToast(`Group of ${groupItemsCount + 1} items marked as bought!`, 'success');
+            if (groupDoc.exists && groupDoc.data().autoBuy) {
+                // Get all items in this group that are not yet bought
+                const groupItemsSnapshot = await firebaseDb.collection('lists').doc(currentListId)
+                    .collection('items')
+                    .where('groupId', '==', item.groupId)
+                    .where('bought', '==', false)
+                    .get();
+                
+                // Mark all other items in the group as bought
+                const batch = firebase.firestore().batch();
+                groupItemsSnapshot.forEach(doc => {
+                    if (doc.id !== itemId) { // Don't update the item we just bought
+                        const itemRef = firebaseDb.collection('lists').doc(currentListId)
+                            .collection('items').doc(doc.id);
+                        batch.update(itemRef, {
+                            bought: true,
+                            buyerName: buyerName + ' (Auto-buy)',
+                            buyerEmail: buyerEmail,
+                            buyerNote: 'Automatically marked as bought due to group auto-buy setting',
+                            datePurchased: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    }
+                });
+                
+                if (!groupItemsSnapshot.empty) {
+                    await batch.commit();
+                    showToast(`Item and ${groupItemsSnapshot.size - 1} other group items marked as bought!`, 'success');
+                } else {
+                    showToast('Item marked as bought!', 'success');
+                }
+                
             } else {
                 showToast('Item marked as bought!', 'success');
             }
@@ -1526,6 +1818,7 @@ async function markAsBought(itemId) {
         loadListItems(currentListId);
     } catch (error) {
         showToast('Error marking item as bought: ' + error.message, 'error');
+        throw error;
     }
 }
 
@@ -1564,8 +1857,7 @@ async function saveItem() {
         price: document.getElementById('itemPrice').value || null,
         position: (await firebaseDb.collection('lists').doc(currentListId).collection('items').get()).size + 1,
         bought: false,
-        reliantItemId: document.getElementById('itemReliant').value || null,
-        isGroup: document.getElementById('itemGroup').checked,
+        groupId: document.getElementById('itemGroup').value || null,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
@@ -1590,6 +1882,8 @@ async function saveItem() {
             delete itemData.position;
             delete itemData.createdAt;
             
+            // Include groupId when updating
+            itemData.groupId = document.getElementById('itemGroup').value || null;
             await firebaseDb.collection('lists').doc(currentListId)
                 .collection('items').doc(itemId).update(itemData);
             showToast('Item updated successfully!', 'success');
