@@ -14,6 +14,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="./firebase-config.js"></script>
     
     <!-- QR Code Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -182,8 +183,8 @@
                     </div>
                     
                     <div class="input-group">
-                        <label for="itemPosition">Position</label>
-                        <input type="number" id="itemPosition" min="1">
+                        <label for="itemPosition">Position (e.g., 3.1 or 7)</label>
+                        <input type="text" id="itemPosition" placeholder="Composite or absolute (e.g., 3.1 or 7)">
                     </div>
                     
                     <div class="input-group">

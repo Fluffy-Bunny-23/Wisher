@@ -583,6 +583,40 @@ input:checked + .slider:before {
   cursor: grabbing;
 }
 
+.group-container {
+  background-color: var(--surface-color);
+  border-radius: var(--border-radius-large);
+  box-shadow: var(--shadow-1);
+  padding: 20px;
+  transition: box-shadow 0.2s ease, background-color 0.2s ease;
+  position: relative;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.group-container:hover {
+  box-shadow: var(--shadow-2);
+}
+
+.group-container:hover .group-actions {
+  opacity: 1;
+}
+
+/* Group Actions */
+.group-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  position: absolute;
+  right: 20px;
+  top: 20px;
+}
+
 /* Bought Item Info */
 .bought-info {
   background-color: var(--primary-light);
@@ -704,6 +738,16 @@ input:checked + .slider:before {
   gap: 16px;
 }
 
+/* Delete Button Style */
+.delete-button {
+  color: var(--error-color);
+  border-color: var(--error-color);
+}
+
+.delete-button:hover {
+  background-color: var(--error-color);
+  color: var(--on-primary);
+}
 .item-image-container {
   text-align: center;
   margin-bottom: 8px;

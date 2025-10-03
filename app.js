@@ -990,6 +990,13 @@ function displayItems(items, groups = {}) {
                 <span class="material-icons">deselect</span>
                 Deselect All
             </button>
+            <div class="move-to-controls" style="display:flex; gap: 8px; align-items:center; margin: 0 8px;">
+                <input type="text" id="moveToPositionInput" class="input" placeholder="Move to position (e.g., 3.1 or 7)">
+                <button class="btn btn-primary" id="moveToPositionBtn">
+                    <span class="material-icons">swap_vert</span>
+                    Move To
+                </button>
+            </div>
             <button class="btn btn-error" id="deleteSelectedBtn">
                 <span class="material-icons">delete</span>
                 Delete Selected
@@ -1001,6 +1008,31 @@ function displayItems(items, groups = {}) {
     // Add event listeners for action bar buttons
     document.getElementById('deselectAllBtn').addEventListener('click', deselectAllItems);
     document.getElementById('deleteSelectedBtn').addEventListener('click', deleteSelectedItems);
+
+    // Move-to-position controls
+    const moveInputEl = document.getElementById('moveToPositionInput');
+    const moveBtnEl = document.getElementById('moveToPositionBtn');
+    if (moveBtnEl && moveInputEl) {
+        moveBtnEl.addEventListener('click', async () => {
+            const raw = moveInputEl.value.trim();
+            if (!raw) {
+                showToast('Please enter a position (e.g., 3.1 or 7)', 'warning');
+                return;
+            }
+            try {
+                await moveSelectedItemsToPosition(raw);
+            } catch (err) {
+                console.error('Error moving selected items:', err);
+                showToast('Error moving selected items: ' + (err.message || err), 'error');
+            }
+        });
+        moveInputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                moveBtnEl.click();
+            }
+        });
+    }
 
     // Prepare grouping
     const groupsMap = groups || {};
@@ -1030,6 +1062,10 @@ function displayItems(items, groups = {}) {
 
     const renderedGroups = new Set();
 
+    // Composite numbering support for groups (display-only)
+    const groupDisplayIndex = {};
+    let nextGroupNumber = 1;
+
     function isGroupVisible(group) {
         if (!group) return true;
         if (group.conditionalVisibility && group.triggerItemId) {
@@ -1050,22 +1086,54 @@ function displayItems(items, groups = {}) {
         groupContainer.className = 'group-container';
         groupContainer.dataset.groupId = groupId;
 
+        const isOwner = currentUser && currentUser.email === currentList.owner;
+        const collaboratorsField = currentList.collaborators || [];
+        const isCollaborator = currentUser && (
+            Array.isArray(collaboratorsField)
+                ? collaboratorsField.includes(currentUser.email)
+                : typeof collaboratorsField === 'object' && collaboratorsField !== null
+                    ? Object.values(collaboratorsField).includes(currentUser.email)
+                    : false
+        );
+        const canEdit = isOwner || isCollaborator;
+
         // Group header
         const header = document.createElement('div');
         header.className = 'group-header';
         const groupImg = group && group.imageUrl ? `<img src="${group.imageUrl}" alt="${escapeHtml(group.name || 'Group')}" class="group-image" onerror="this.style.display='none'">` : '';
+        const displayNo = groupDisplayIndex[groupId] || nextGroupNumber;
         header.innerHTML = `
             ${groupImg}
             <div class="group-header-text">
-                <h3 class="group-title">${escapeHtml(group && group.name ? group.name : 'Group')}</h3>
+                <h3 class="group-title"><span class="group-number">${displayNo}.</span> ${escapeHtml(group && group.name ? group.name : 'Group')}</h3>
                 ${group && group.description ? `<p class="group-description">${escapeHtml(group.description)}</p>` : ''}
+            </div>
+            <div class="item-actions group-actions">
+                ${canEdit ? `
+                    <button class="icon-button" onclick="editGroup('${groupId}')" title="Edit Group">
+                        <span class="material-icons">edit</span>
+                    </button>
+                    <button class="icon-button" onclick="deleteGroup('${groupId}', '${escapeHtml(group.name)}')" title="Delete Group">
+                        <span class="material-icons">delete</span>
+                    </button>
+                ` : ''}
+                <button class="icon-button" onclick="showGroupInfo('${groupId}')" title="Group Info">
+                    <span class="material-icons">info</span>
+                </button>
             </div>
         `;
         groupContainer.appendChild(header);
 
+        // Assign group display number if first time rendering
+        if (!groupDisplayIndex[groupId]) {
+            groupDisplayIndex[groupId] = nextGroupNumber++;
+        }
+        groupContainer.dataset.groupDisplayNumber = groupDisplayIndex[groupId];
+
         // Group items
         groupItems.forEach((item, idx) => {
-            const itemCard = createItemCard(item, idx + 1);
+            const compositeLabel = `${groupDisplayIndex[groupId]}.${idx + 1}`;
+            const itemCard = createItemCard(item, compositeLabel);
             groupContainer.appendChild(itemCard);
         });
 
@@ -1127,7 +1195,16 @@ function createItemCard(item, position) {
         e.stopPropagation();
         handleItemSelection(item.id, e.ctrlKey, e.shiftKey);
     });
-    
+
+    // Create delete button
+    if (canEdit) {
+        const deleteButton = document.createElement('div');
+        deleteButton.className = 'item-delete-button';
+        deleteButton.innerHTML = '&#10005;'; // Using 'X' as a placeholder for delete icon
+        deleteButton.onclick = () => deleteItem(item.id, item.name);
+        card.appendChild(deleteButton);
+    }
+
     // Create content wrapper
     const contentWrapper = document.createElement('div');
     contentWrapper.className = 'item-content-wrapper';
@@ -1151,6 +1228,11 @@ function createItemCard(item, position) {
             <h3 class="item-title">${escapeHtml(item.name)}</h3>
             <div class="item-actions">
                 ${canEdit ? `
+                    <button class="icon-button" onclick="deleteItem('${item.id}', '${escapeHtml(item.name)}')" title="Delete">
+                        <span class="material-icons">delete</span>
+                    </button>
+                ` : ''}
+                ${canEdit ? `
                     <button class="icon-button" onclick="editItem('${item.id}')" title="Edit">
                         <span class="material-icons">edit</span>
                     </button>
@@ -1167,6 +1249,11 @@ function createItemCard(item, position) {
  `
                     <button class="icon-button" onclick="markAsBought('${item.id}')" title="Mark as bought">
                         <span class="material-icons">shopping_cart</span>
+                    </button>
+                ` : ''}
+                ${canEdit ? `
+                    <button class="icon-button" onclick="deleteItem('${item.id}', '${escapeHtml(item.name)}')" title="Delete">
+                        <span class="material-icons">delete</span>
                     </button>
                 ` : ''}
                 ${canEdit ? `
@@ -1225,6 +1312,22 @@ function createItemCard(item, position) {
     card.appendChild(contentWrapper);
     
     return card;
+}
+
+// Group functions (placeholders for now)
+function editGroup(groupId) {
+    console.log('Edit group:', groupId);
+    // Implement actual edit logic later
+}
+
+function deleteGroup(groupId, groupName) {
+    console.log('Delete group:', groupId, groupName);
+    // Implement actual delete logic later
+}
+
+function showGroupInfo(groupId) {
+    console.log('Show group info:', groupId);
+    // Implement actual info display logic later
 }
 
 // Multi-select functionality
@@ -1368,6 +1471,112 @@ async function deleteSelectedItems() {
     } catch (error) {
         console.error('Error deleting items:', error);
         showToast('Error deleting items: ' + error.message, 'error');
+        hideLoading();
+    }
+}
+
+// Move a contiguous block (the currently selected items) to a target position.
+// rawPosition supports composite (e.g., "3.1") or absolute numbers (e.g., "7").
+// The relative order of the selected items is preserved.
+async function moveSelectedItemsToPosition(rawPosition) {
+    if (!currentListId) {
+        showToast('No active list selected', 'error');
+        return;
+    }
+
+    if (!Array.isArray(selectedItems) || selectedItems.length === 0) {
+        showToast('No items selected to move', 'warning');
+        return;
+    }
+
+    const isOwner = currentUser && currentUser.email === currentList.owner;
+    const collaboratorsField = currentList.collaborators || [];
+    const isCollaborator = currentUser && (
+        Array.isArray(collaboratorsField)
+            ? collaboratorsField.includes(currentUser.email)
+            : typeof collaboratorsField === 'object' && collaboratorsField !== null
+                ? Object.values(collaboratorsField).includes(currentUser.email)
+                : false
+    );
+    const canEdit = isOwner || isCollaborator;
+
+    if (!canEdit) {
+        showToast('You don\'t have permission to move items', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+        // Determine the base absolute insertion position for a single item at the requested spot
+        const baseAbsolute = await parseCompositeOrAbsolutePosition(String(rawPosition || '').trim(), itemsRef);
+
+        // Fetch the current ordering
+        const snap = await itemsRef.orderBy('position', 'asc').get();
+        const allItems = [];
+        snap.forEach(doc => allItems.push({ id: doc.id, ...doc.data() }));
+
+        // Selected items in current order
+        const selectedSet = new Set(selectedItems);
+        const selectedOrdered = allItems.filter(it => selectedSet.has(it.id));
+        if (selectedOrdered.length === 0) {
+            showToast('No matching selected items found to move', 'warning');
+            hideLoading();
+            return;
+        }
+
+        // Non-selected items in current order
+        const others = allItems.filter(it => !selectedSet.has(it.id));
+
+        // Map the requested absolute index to an insertion index in the "others" array
+        let insertionIndex = others.length; // default append
+        if (baseAbsolute <= allItems.length) {
+            const targetAllIdx = Math.max(0, baseAbsolute - 1);
+            const targetItemId = allItems[targetAllIdx]?.id;
+            // Try to locate this target among non-selected items
+            const idxInOthers = targetItemId ? others.findIndex(it => it.id === targetItemId) : -1;
+            if (idxInOthers !== -1) {
+                insertionIndex = idxInOthers;
+            } else {
+                // If target points to a selected item, find the next non-selected item after it
+                let foundIdx = -1;
+                for (let i = targetAllIdx; i < allItems.length; i++) {
+                    const id = allItems[i].id;
+                    const j = others.findIndex(it => it.id === id);
+                    if (j !== -1) { foundIdx = j; break; }
+                }
+                // If none found, insert at end
+                insertionIndex = foundIdx !== -1 ? foundIdx : others.length;
+            }
+        } else {
+            // baseAbsolute === allItems.length + 1 (append)
+            insertionIndex = others.length;
+        }
+
+        // Build the new total order: others before insertion, then selected block, then the rest
+        const newOrder = [
+            ...others.slice(0, insertionIndex),
+            ...selectedOrdered,
+            ...others.slice(insertionIndex)
+        ];
+
+        // Write back positions in a single batch
+        const batch = firebaseDb.batch();
+        newOrder.forEach((it, idx) => {
+            batch.update(itemsRef.doc(it.id), {
+                position: idx + 1,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+        await batch.commit();
+
+        showToast(`Moved ${selectedOrdered.length} item(s) to position ${String(rawPosition).trim()}`, 'success');
+        // Reload items to reflect new order
+        await loadListItems(currentListId);
+    } catch (err) {
+        console.error('Error moving selected items:', err);
+        showToast('Error moving selected items: ' + (err.message || err), 'error');
+    } finally {
         hideLoading();
     }
 }
@@ -1844,9 +2053,159 @@ async function markAsNotBought(itemId) {
     }
 }
 
+async function parseCompositeOrAbsolutePosition(raw, itemsRef) {
+    try {
+        // Fetch all items ordered by position
+        const itemsSnap = await itemsRef.orderBy('position', 'asc').get();
+        const allItems = [];
+        itemsSnap.forEach(doc => allItems.push({ id: doc.id, ...doc.data() }));
+        const totalCount = allItems.length;
+
+        const trimmed = (raw || '').trim();
+        if (!trimmed) {
+            return totalCount + 1; // default append
+        }
+        // Absolute numeric position
+        if (/^\d+$/.test(trimmed)) {
+            const n = parseInt(trimmed, 10);
+            return Math.max(1, Math.min(n, totalCount + 1));
+        }
+        // Composite pattern G.I
+        const m = trimmed.match(/^(\d+)\.(\d+)$/);
+        if (!m) {
+            // Unrecognized input -> append at end
+            return totalCount + 1;
+        }
+        let groupNumber = parseInt(m[1], 10);
+        let itemIndexInGroup = parseInt(m[2], 10);
+        if (groupNumber < 1 || itemIndexInGroup < 1) {
+            return totalCount + 1;
+        }
+
+        // Build groups map
+        const groupsSnap = await firebaseDb.collection('lists').doc(currentListId).collection('groups').get();
+        const groupsMap = {};
+        groupsSnap.forEach(doc => { groupsMap[doc.id] = { id: doc.id, ...doc.data() }; });
+
+        // Build visible items similar to displayItems()
+        const items = [];
+        allItems.forEach(it => {
+            if (!showBoughtItems && it.bought) return; // respect toggle
+            items.push(it);
+        });
+
+        const itemsByGroup = {};
+        const ungroupedItems = [];
+        items.forEach(it => {
+            const gid = it.groupId || '';
+            if (!gid) ungroupedItems.push(it);
+            else {
+                if (!itemsByGroup[gid]) itemsByGroup[gid] = [];
+                itemsByGroup[gid].push(it);
+            }
+        });
+
+        // trigger -> groups
+        const triggerToGroups = {};
+        Object.keys(groupsMap).forEach(gid => {
+            const g = groupsMap[gid];
+            if (g && g.triggerItemId) {
+                if (!triggerToGroups[g.triggerItemId]) triggerToGroups[g.triggerItemId] = [];
+                triggerToGroups[g.triggerItemId].push(gid);
+            }
+        });
+
+        function isGroupVisible(group) {
+            if (!group) return true;
+            if (group.conditionalVisibility && group.triggerItemId) {
+                const triggerItem = items.find(it => it.id === group.triggerItemId);
+                return !!(triggerItem && triggerItem.bought);
+            }
+            return true;
+        }
+
+        // Build the visible sequence and assign display group numbers in render order
+        const visibleSequence = []; // items in the order they are shown
+        const groupDisplayIndex = {};
+        let nextGroupNumber = 1;
+        const renderedGroups = new Set();
+        const groupStartIndex = {}; // gid -> start index within visibleSequence
+
+        function renderGroupBlock(gid) {
+            if (renderedGroups.has(gid)) return;
+            const group = groupsMap[gid];
+            const groupItems = itemsByGroup[gid] || [];
+            if (!isGroupVisible(group)) return;
+            if (!groupDisplayIndex[gid]) groupDisplayIndex[gid] = nextGroupNumber++;
+            groupStartIndex[gid] = visibleSequence.length;
+            groupItems.forEach(it => visibleSequence.push(it));
+            renderedGroups.add(gid);
+        }
+
+        // Render ungrouped items and any triggered groups after each
+        ungroupedItems.forEach(it => {
+            visibleSequence.push(it);
+            const groupsTriggered = triggerToGroups[it.id] || [];
+            groupsTriggered.forEach(gid => {
+                const g = groupsMap[gid];
+                if (!g || !g.conditionalVisibility || isGroupVisible(g)) {
+                    renderGroupBlock(gid);
+                }
+            });
+        });
+
+        // Render remaining groups (e.g., without triggers)
+        Object.keys(itemsByGroup).forEach(gid => {
+            if (renderedGroups.has(gid)) return;
+            const g = groupsMap[gid];
+            if (isGroupVisible(g)) renderGroupBlock(gid);
+        });
+
+        // Locate the real group id by its display number
+        const targetGid = Object.keys(groupDisplayIndex).find(gid => groupDisplayIndex[gid] === groupNumber);
+        if (!targetGid) return totalCount + 1; // append if not found
+
+        const start = groupStartIndex[targetGid] ?? -1;
+        const len = (itemsByGroup[targetGid] || []).length;
+        if (start < 0) return totalCount + 1;
+
+        // Clamp item index to [1..len+1] to allow placing after group
+        if (itemIndexInGroup > len + 1) itemIndexInGroup = len + 1;
+
+        // Determine target visible index (0-based)
+        const targetVisibleIndex = start + (itemIndexInGroup - 1);
+        if (itemIndexInGroup <= len) {
+            const targetItemId = visibleSequence[targetVisibleIndex]?.id;
+            const idxInAll = allItems.findIndex(it => it.id === targetItemId);
+            return Math.max(1, Math.min(idxInAll + 1, totalCount + 1));
+        } else {
+            // After last item in the group
+            if (len > 0) {
+                const lastItemId = (itemsByGroup[targetGid][len - 1]).id;
+                const idxInAll = allItems.findIndex(it => it.id === lastItemId);
+                return Math.max(1, Math.min(idxInAll + 2, totalCount + 1));
+            } else {
+                // Empty group, place at end as fallback
+                return totalCount + 1;
+            }
+        }
+    } catch (err) {
+        console.error('Error parsing position input:', err);
+        // Fallback to append
+        const snap = await itemsRef.get();
+        return snap.size + 1;
+    }
+}
+
 async function saveItem() {
     const form = document.getElementById('itemForm');
     const formData = new FormData(form);
+
+    // Determine desired absolute position from input; support composite like "G.I" or absolute numbers; default to append at end
+    const posInputEl = document.getElementById('itemPosition');
+    const rawPos = posInputEl ? (posInputEl.value || '').trim() : '';
+    const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+    const desiredPosition = await parseCompositeOrAbsolutePosition(rawPos, itemsRef);
     
     const itemData = {
         name: document.getElementById('itemName').value,
@@ -1855,7 +2214,7 @@ async function saveItem() {
         imageUrl: document.getElementById('itemImageURL').value,
         notes: document.getElementById('itemNotes').value,
         price: document.getElementById('itemPrice').value || null,
-        position: (await firebaseDb.collection('lists').doc(currentListId).collection('items').get()).size + 1,
+        position: desiredPosition,
         bought: false,
         groupId: document.getElementById('itemGroup').value || null,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1878,12 +2237,14 @@ async function saveItem() {
             // Edit mode - update existing item
             const itemId = form.dataset.itemId;
             
-            // Don't override position and creation date for edits
-            delete itemData.position;
+            // Don't override creation date for edits
             delete itemData.createdAt;
             
-            // Include groupId when updating
+            // Include groupId when updating; only update position if user provided a position input
             itemData.groupId = document.getElementById('itemGroup').value || null;
+            if (!rawPos) {
+                delete itemData.position;
+            }
             await firebaseDb.collection('lists').doc(currentListId)
                 .collection('items').doc(itemId).update(itemData);
             showToast('Item updated successfully!', 'success');
@@ -1899,11 +2260,15 @@ async function saveItem() {
 }
 
 async function updateItemPosition(itemId, newPosition) {
-    await firebaseDb.collection('lists').doc(currentListId)
-        .collection('items').doc(itemId).update({
-            position: newPosition,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+    // Allow composite (e.g., "3.2") or absolute; convert to absolute then clamp to [1, last+1]
+    const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+    let absolute = typeof newPosition === 'number' ? newPosition : await parseCompositeOrAbsolutePosition(String(newPosition || '').trim(), itemsRef);
+    const snap = await itemsRef.get();
+    const clamped = Math.max(1, Math.min(absolute, snap.size + 1));
+    await itemsRef.doc(itemId).update({
+        position: clamped,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
 }
 
 // Settings functions
