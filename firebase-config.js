@@ -1,14 +1,15 @@
 // Firebase Configuration
 // Replace these values with your own Firebase project configuration
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID",
-  measurementId: "YOUR_MEASUREMENT_ID" // Optional
+  apiKey: "AIzaSyBrYt9QTTYlUCvHSg972wZKDAI2VeByYrA",
+  authDomain: "wisher-lists.firebaseapp.com",
+  projectId: "wisher-lists",
+  storageBucket: "wisher-lists.firebasestorage.app",
+  messagingSenderId: "1064489993372",
+  appId: "1:1064489993372:web:21238cc6ed82bf48c05959",
+  measurementId: "G-WKD3PGQ61E"
 };
+
 
 // Initialize Firebase
 // Ensure Firebase is loaded before this script runs. Typically, this is handled by the script tag in index.html.
