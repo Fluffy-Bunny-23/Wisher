@@ -1078,6 +1078,10 @@ function displayItems(items, groups = {}) {
     function renderGroupBlock(groupId) {
         if (renderedGroups.has(groupId)) return;
         const group = groupsMap[groupId];
+        if (!group) {
+            console.warn(`Group ${groupId} not found, skipping render`);
+            return;
+        }
         const groupItems = itemsByGroup[groupId] || [];
         if (!isGroupVisible(group)) return; // respect conditional visibility
 
@@ -1100,20 +1104,22 @@ function displayItems(items, groups = {}) {
         // Group header
         const header = document.createElement('div');
         header.className = 'group-header';
-        const groupImg = group && group.imageUrl ? `<img src="${group.imageUrl}" alt="${escapeHtml(group.name || 'Group')}" class="group-image" onerror="this.style.display='none'">` : '';
+        const groupImg = group.imageUrl ? `<img src="${group.imageUrl}" alt="${escapeHtml(group.name || 'Group')}" class="group-image" onerror="this.style.display='none'">` : '';
         const displayNo = groupDisplayIndex[groupId] || nextGroupNumber;
+        const groupName = group.name || 'Untitled Group';
+        const groupDescription = group.description || '';
         header.innerHTML = `
             ${groupImg}
             <div class="group-header-text">
-                <h3 class="group-title"><span class="group-number">${displayNo}.</span> ${escapeHtml(group && group.name ? group.name : 'Group')}</h3>
-                ${group && group.description ? `<p class="group-description">${escapeHtml(group.description)}</p>` : ''}
+                <h3 class="group-title"><span class="group-number">${displayNo}.</span> ${escapeHtml(groupName)}</h3>
+                ${groupDescription ? `<p class="group-description">${escapeHtml(groupDescription)}</p>` : ''}
             </div>
-            <div class="item-actions group-actions">
+            <div class="group-actions">
                 ${canEdit ? `
                     <button class="icon-button" onclick="editGroup('${groupId}')" title="Edit Group">
                         <span class="material-icons">edit</span>
                     </button>
-                    <button class="icon-button" onclick="deleteGroup('${groupId}', '${escapeHtml(group.name)}')" title="Delete Group">
+                    <button class="icon-button" onclick="deleteGroup('${groupId}', '${escapeHtml(groupName)}')" title="Delete Group">
                         <span class="material-icons">delete</span>
                     </button>
                 ` : ''}
@@ -1162,7 +1168,7 @@ function displayItems(items, groups = {}) {
     Object.keys(itemsByGroup).forEach(groupId => {
         if (renderedGroups.has(groupId)) return;
         const group = groupsMap[groupId];
-        if (isGroupVisible(group)) {
+        if (group && isGroupVisible(group)) {
             renderGroupBlock(groupId);
         }
     });
