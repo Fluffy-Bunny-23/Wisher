@@ -52,8 +52,8 @@
       itemElement.closest('.a-spacing-base'),
       itemElement.closest('.a-section'),
       itemElement.closest('.a-row'),
-      itemElement.parentElement?.parentElement,
-      itemElement.parentElement?.parentElement?.parentElement
+      itemElement.parentElement && itemElement.parentElement.parentElement,
+      itemElement.parentElement && itemElement.parentElement.parentElement && itemElement.parentElement.parentElement.parentElement
     ].filter(Boolean);
 
     let itemContainer = null;
@@ -71,7 +71,7 @@
       // Try to find images near this item by looking for alt text matches
       const allImages = document.querySelectorAll('img');
       for (const img of allImages) {
-        const alt = img.alt?.toLowerCase() || '';
+        const alt = (img.alt || '').toLowerCase();
         const nameParts = name.toLowerCase().split(' ').slice(0, 5); // First 5 words
         if (nameParts.some(part => part.length > 3 && alt.includes(part))) {
           itemContainer = img.parentElement;
