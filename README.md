@@ -1,6 +1,6 @@
-# Wisher - Smart Wishlist Manager
+# Wisher - Wishlist Manager
 
-A modern, feature-rich wishlist application built with HTML, CSS, JavaScript, and Firebase. Create, share, and manage wishlists with advanced features like drag-and-drop reordering, collaborative editing, and intelligent sharing options.
+A modern, feature-rich wishlist application built with HTML, CSS, JavaScript, and Firebase. Create, share, and manage wishlists with features like drag-and-drop reordering, collaborative editing, and sharing.
 
 ## Features
 
