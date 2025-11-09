@@ -7,8 +7,7 @@ A modern, feature-rich wishlist application built with HTML, CSS, JavaScript, an
 ### Core Functionality
 -  **Firebase Authentication** - Google OAuth and email/password sign-in
 -  **Real-time Database** - Firestore backend with security rules
--  **Material Design UI** - Clean, modern interface with light blue theme
--  **Responsive Design** - Works on desktop, tablet, and mobile devices
+-  **Material Design  Based UI** - Clean, modern interface with light blue theme
 
 ### List Management
 -  **Multiple Lists** - Create and manage multiple wishlists
