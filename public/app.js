@@ -575,6 +575,26 @@ function setupEventListeners() {
     } catch (error) {
         console.error('Error setting up sidebar list container event listener:', error);
     }
+
+    // Debug helper: log clicks on key management buttons so we can see if handlers are firing
+    try {
+        const managedButtonIds = new Set([
+            'createListBtn','createListSidebarBtn','addItemBtn','addGroupBtn','manageListBtn','importListBtn',
+            'addCollaboratorBtn','addViewerBtn','saveItemBtn','saveGroupBtn','saveEditBtn'
+        ]);
+        window.addEventListener('click', (e) => {
+            try {
+                const btn = e.target.closest && e.target.closest('button');
+                if (btn && btn.id && managedButtonIds.has(btn.id)) {
+                    console.log(`DEBUG: Button clicked -> id=${btn.id}, classes=${btn.className}`);
+                }
+            } catch (err) {
+                // swallow
+            }
+        });
+    } catch (err) {
+        console.error('Error setting up debug click logger:', err);
+    }
 }
 
 // Authentication functions
@@ -977,6 +997,18 @@ function displayItems(items, groups = {}) {
         return;
     }
 
+    // Determine edit permissions for persistence
+    const isOwner = currentUser && currentUser.email === currentList.owner;
+    const collaboratorsField = currentList ? currentList.collaborators || [] : [];
+    const isCollaborator = currentUser && (
+        Array.isArray(collaboratorsField)
+            ? collaboratorsField.includes(currentUser.email)
+            : typeof collaboratorsField === 'object' && collaboratorsField !== null
+                ? Object.values(collaboratorsField).includes(currentUser.email)
+                : false
+    );
+    const canEdit = isOwner || isCollaborator;
+
     // Create selection action bar
     const selectionActionBar = document.createElement('div');
     selectionActionBar.id = 'selectionActionBar';
@@ -1062,9 +1094,10 @@ function displayItems(items, groups = {}) {
 
     const renderedGroups = new Set();
 
-    // Composite numbering support for groups (display-only)
+    // Shared sequential display counter for both items and groups (display-only)
+    // This ensures groups take a number in the same sequence as items
     const groupDisplayIndex = {};
-    let nextGroupNumber = 1;
+    let displayCounter = 1;
 
     function isGroupVisible(group) {
         if (!group) return true;
@@ -1105,7 +1138,7 @@ function displayItems(items, groups = {}) {
         const header = document.createElement('div');
         header.className = 'group-header';
         const groupImg = group.imageUrl ? `<img src="${group.imageUrl}" alt="${escapeHtml(group.name || 'Group')}" class="group-image" onerror="this.style.display='none'">` : '';
-        const displayNo = groupDisplayIndex[groupId] || nextGroupNumber;
+    const displayNo = groupDisplayIndex[groupId] || displayCounter;
         const groupName = group.name || 'Untitled Group';
         const groupDescription = group.description || '';
         header.innerHTML = `
@@ -1130,9 +1163,9 @@ function displayItems(items, groups = {}) {
         `;
         groupContainer.appendChild(header);
 
-        // Assign group display number if first time rendering
+        // Assign group display number if first time rendering using shared counter
         if (!groupDisplayIndex[groupId]) {
-            groupDisplayIndex[groupId] = nextGroupNumber++;
+            groupDisplayIndex[groupId] = displayCounter++;
         }
         groupContainer.dataset.groupDisplayNumber = groupDisplayIndex[groupId];
 
@@ -1149,8 +1182,9 @@ function displayItems(items, groups = {}) {
 
     // Render ungrouped items first; attach any groups triggered by each item directly after
     if (ungroupedItems.length > 0) {
-        ungroupedItems.forEach((item, idx) => {
-            const itemCard = createItemCard(item, idx + 1);
+        ungroupedItems.forEach((item) => {
+            const label = String(displayCounter++);
+            const itemCard = createItemCard(item, label);
             container.appendChild(itemCard);
 
             const groupsTriggered = triggerToGroups[item.id] || [];
@@ -1172,6 +1206,42 @@ function displayItems(items, groups = {}) {
             renderGroupBlock(groupId);
         }
     });
+
+    // After rendering, persist the visible ordering back to the database so stored positions match display order.
+    // Only attempt to write if the current user can edit the list (owner or collaborator).
+    try {
+        if (canEdit && firebaseDb && currentListId) {
+            const visibleIds = Array.from(container.querySelectorAll('.item-card')).map(c => c.dataset.itemId).filter(Boolean);
+            if (visibleIds.length > 0) {
+                persistVisibleOrderToDb(visibleIds).catch(err => console.error('Error persisting order to DB:', err));
+            }
+        }
+    } catch (err) {
+        console.error('Error during persistence step:', err);
+    }
+}
+
+// Persist an array of item IDs (in display order) to Firestore by updating their numeric positions.
+// Handles large lists by chunking batch commits to avoid Firestore batch size limits.
+async function persistVisibleOrderToDb(orderedItemIds) {
+    if (!currentListId || !firebaseDb) return;
+    if (!Array.isArray(orderedItemIds) || orderedItemIds.length === 0) return;
+
+    const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+    // Firestore limits batches to 500 operations. Use safe chunk size (e.g., 400).
+    const CHUNK_SIZE = 400;
+    for (let i = 0; i < orderedItemIds.length; i += CHUNK_SIZE) {
+        const chunk = orderedItemIds.slice(i, i + CHUNK_SIZE);
+        const batch = firebaseDb.batch();
+        chunk.forEach((id, idx) => {
+            const absolutePos = i + idx + 1; // 1-based positions across whole list
+            batch.update(itemsRef.doc(id), {
+                position: absolutePos,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+        await batch.commit();
+    }
 }
 
 function createItemCard(item, position) {
@@ -1311,17 +1381,95 @@ function createItemCard(item, position) {
 // Group functions (placeholders for now)
 function editGroup(groupId) {
     console.log('Edit group:', groupId);
-    // Implement actual edit logic later
+    try {
+        const groupRef = firebaseDb.collection('lists').doc(currentListId).collection('groups').doc(groupId);
+        groupRef.get().then(doc => {
+            if (!doc.exists) {
+                showToast('Group not found', 'error');
+                return;
+            }
+            const group = doc.data();
+            const form = document.getElementById('groupForm');
+            if (!form) {
+                showToast('Group form not found', 'error');
+                return;
+            }
+
+            // Populate fields
+            document.getElementById('groupModalTitle').textContent = 'Edit Group';
+            document.getElementById('groupName').value = group.name || '';
+            document.getElementById('groupImageURL').value = group.imageUrl || '';
+            document.getElementById('groupDescription').value = group.description || '';
+            document.getElementById('groupNotes').value = group.notes || '';
+            document.getElementById('groupAutoBuy').checked = !!group.autoBuy;
+            document.getElementById('groupConditionalVisibility').checked = !!group.conditionalVisibility;
+
+            // Set form mode and id
+            form.dataset.mode = 'edit';
+            form.dataset.groupId = groupId;
+
+            // Populate items for trigger selector and set trigger value after population
+            populateItemSelector();
+            setTimeout(() => {
+                const selector = document.getElementById('groupTriggerItem');
+                if (selector) selector.value = group.triggerItemId || '';
+                // Ensure conditional selector visibility
+                const conditionalItemSelector = document.getElementById('conditionalItemSelector');
+                if (conditionalItemSelector) conditionalItemSelector.style.display = document.getElementById('groupConditionalVisibility').checked ? 'block' : 'none';
+            }, 120);
+
+            showModal('groupModal');
+        }).catch(err => {
+            console.error('Error fetching group for edit:', err);
+            showToast('Error loading group: ' + (err.message || err), 'error');
+        });
+    } catch (err) {
+        console.error('editGroup error:', err);
+        showToast('Error editing group: ' + (err.message || err), 'error');
+    }
 }
 
-function deleteGroup(groupId, groupName) {
+async function deleteGroup(groupId, groupName) {
     console.log('Delete group:', groupId, groupName);
-    // Implement actual delete logic later
+    if (!confirm(`Delete group "${groupName}" and remove group assignment from its items? This cannot be undone.`)) return;
+    try {
+        const listRef = firebaseDb.collection('lists').doc(currentListId);
+        const groupRef = listRef.collection('groups').doc(groupId);
+        const itemsRef = listRef.collection('items');
+
+        // Unset groupId on any items in the group
+        const groupItemsSnap = await itemsRef.where('groupId', '==', groupId).get();
+        const batch = firebaseDb.batch();
+        groupItemsSnap.forEach(doc => {
+            batch.update(itemsRef.doc(doc.id), { groupId: firebase.firestore.FieldValue.delete(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        });
+        // Delete the group document
+        batch.delete(groupRef);
+        await batch.commit();
+
+        showToast('Group deleted and items updated', 'success');
+        await loadListItems(currentListId);
+    } catch (err) {
+        console.error('Error deleting group:', err);
+        showToast('Error deleting group: ' + (err.message || err), 'error');
+    }
 }
 
 function showGroupInfo(groupId) {
     console.log('Show group info:', groupId);
-    // Implement actual info display logic later
+    // Simple info display using modal: reuse group modal in read-only mode
+    try {
+        const groupRef = firebaseDb.collection('lists').doc(currentListId).collection('groups').doc(groupId);
+        groupRef.get().then(doc => {
+            if (!doc.exists) { showToast('Group not found', 'error'); return; }
+            const g = doc.data();
+            // Use alert as a lightweight info view for now
+            const txt = `Group: ${g.name || 'Untitled'}\n\n${g.description || ''}`;
+            alert(txt);
+        }).catch(err => console.error('Error loading group info:', err));
+    } catch (err) {
+        console.error('showGroupInfo error:', err);
+    }
 }
 
 // Multi-select functionality
