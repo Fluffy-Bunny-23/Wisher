@@ -10,7 +10,7 @@
     console.log('First item closest .a-row:', firstItem.closest('.a-row'));
     
     // Look for images in various containers
-    const possibleContainers = [
+    const possibleContainers = [   
       firstItem.closest('[data-itemid]'),
       firstItem.closest('[data-asin]'),
       firstItem.closest('.a-fixed-left-grid-inner'),

@@ -1202,14 +1202,7 @@ function createItemCard(item, position) {
         handleItemSelection(item.id, e.ctrlKey, e.shiftKey);
     });
 
-    // Create delete button
-    if (canEdit) {
-        const deleteButton = document.createElement('div');
-        deleteButton.className = 'item-delete-button';
-        deleteButton.innerHTML = '&#10005;'; // Using 'X' as a placeholder for delete icon
-        deleteButton.onclick = () => deleteItem(item.id, item.name);
-        card.appendChild(deleteButton);
-    }
+
 
     // Create content wrapper
     const contentWrapper = document.createElement('div');
