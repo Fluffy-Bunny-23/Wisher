@@ -1227,11 +1227,6 @@ function createItemCard(item, position) {
             <h3 class="item-title">${escapeHtml(item.name)}</h3>
             <div class="item-actions">
                 ${canEdit ? `
-                    <button class="icon-button" onclick="deleteItem('${item.id}', '${escapeHtml(item.name)}')" title="Delete">
-                        <span class="material-icons">delete</span>
-                    </button>
-                ` : ''}
-                ${canEdit ? `
                     <button class="icon-button" onclick="editItem('${item.id}')" title="Edit">
                         <span class="material-icons">edit</span>
                     </button>
@@ -1244,15 +1239,15 @@ function createItemCard(item, position) {
                         <span class="material-icons">open_in_new</span>
                     </button>
                 ` : ''}
+                ${canEdit ? `
+                    <button class="icon-button" onclick="summarizeItem('${item.id}')" title="AI Summarize">
+                        <span class="material-icons">psychology</span>
+                    </button>
+                ` : ''}
                 ${!item.bought ?
  `
                     <button class="icon-button" onclick="markAsBought('${item.id}')" title="Mark as bought">
                         <span class="material-icons">shopping_cart</span>
-                    </button>
-                ` : ''}
-                ${canEdit ? `
-                    <button class="icon-button" onclick="deleteItem('${item.id}', '${escapeHtml(item.name)}')" title="Delete">
-                        <span class="material-icons">delete</span>
                     </button>
                 ` : ''}
                 ${canEdit ? `
@@ -2285,6 +2280,101 @@ function loadSettings() {
         apiKeyInput.value = geminiApiKey; // Use the globally set geminiApiKey (from current list)
     }
 }
+
+// AI Summarization functions
+async function summarizeItem(itemId) {
+    try {
+        // Get the item details
+        const itemDoc = await firebaseDb.collection('lists').doc(currentListId).collection('items').doc(itemId).get();
+        const item = itemDoc.data();
+        if (!item) {
+            showToast('Item not found', 'error');
+            return;
+        }
+
+        // Get the list's Gemini API key if available
+        const listDoc = await firebaseDb.collection('lists').doc(currentListId).get();
+        const list = listDoc.data();
+        const apiKey = list.geminiApiKey;
+
+        if (!apiKey) {
+            // Show popup to enter API key
+            const modal = document.getElementById('apiKeyModal') || createApiKeyModal();
+            modal.dataset.itemId = itemId;
+            showModal('apiKeyModal');
+            return;
+        }
+
+        // Use existing item name for summarization
+        await performItemSummarization(itemId, item.name, apiKey);
+    } catch (error) {
+        console.error('Error in summarizeItem:', error);
+        showToast('Error summarizing item', 'error');
+    }
+}
+
+function createApiKeyModal() {
+    const modal = document.createElement('div');
+    modal.id = 'apiKeyModal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <h2>Enter Gemini API Key</h2>
+            <p>An API key is required for AI summarization.</p>
+            <input type="text" id="tempApiKey" class="input" placeholder="Enter Gemini API Key">
+            <div class="modal-buttons">
+                <button onclick="hideModal('apiKeyModal')" class="btn btn-secondary">Cancel</button>
+                <button onclick="handleTempApiKey()" class="btn btn-primary">Summarize</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    return modal;
+}
+
+async function handleTempApiKey() {
+    const apiKey = document.getElementById('tempApiKey').value.trim();
+    const modal = document.getElementById('apiKeyModal');
+    const itemId = modal.dataset.itemId;
+
+    if (!apiKey) {
+        showToast('Please enter an API key', 'error');
+        return;
+    }
+
+    try {
+        const itemDoc = await firebaseDb.collection('lists').doc(currentListId).collection('items').doc(itemId).get();
+        const item = itemDoc.data();
+        
+        hideModal('apiKeyModal');
+        await performItemSummarization(itemId, item.name, apiKey);
+    } catch (error) {
+        console.error('Error in handleTempApiKey:', error);
+        showToast('Error summarizing item', 'error');
+    }
+}
+
+async function performItemSummarization(itemId, itemName, apiKey) {
+    showLoading();
+    try {
+        const result = await summarizeItemName(itemName, apiKey);
+        if (result && result.description) {
+            await firebaseDb.collection('lists').doc(currentListId).collection('items').doc(itemId).update({
+                description: result.description,
+                notes: result.notes || '',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            showToast('Item summarized successfully', 'success');
+            await loadList(currentListId); // Refresh the list to show the new description
+        }
+    } catch (error) {
+        console.error('Error in performItemSummarization:', error);
+        showToast('Error summarizing item', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
 // Initialize Gemini API
 async function summarizeItemName(itemName, apiKey) {
     const keyToUse = apiKey || localStorage.getItem('geminiApiKey');
