@@ -1188,6 +1188,12 @@ function displayItems(items, groups = {}) {
     header.className = 'group-header';
     const groupName = group.name || 'Untitled Group';
     const groupDescription = group.description || '';
+
+    // Create collapse toggle button (defined before insertion/use)
+    const collapseToggle = document.createElement('button');
+    collapseToggle.className = 'icon-button group-collapse-toggle';
+    collapseToggle.title = 'Toggle group items visibility';
+    collapseToggle.innerHTML = `<span class="material-icons">expand_more</span>`;
         
             header.innerHTML = `
                 <div class="group-header-left">
@@ -1222,19 +1228,36 @@ function displayItems(items, groups = {}) {
         itemsContainer.className = 'group-items-container';
         itemsContainer.dataset.groupId = groupId;
         
+        // Check if this group was previously collapsed and restore that state
+        const collapsedGroups = JSON.parse(localStorage.getItem('collapsedGroups') || '{}');
+        const isCollapsed = collapsedGroups[currentListId]?.[groupId] || false;
+        if (isCollapsed) {
+            itemsContainer.classList.add('collapsed');
+            collapseToggle.innerHTML = `<span class="material-icons">expand_less</span>`;
+            collapseToggle.title = 'Expand group items';
+        }
+        
         // Add collapse toggle event listener
         collapseToggle.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
             itemsContainer.classList.toggle('collapsed');
             const icon = collapseToggle.querySelector('.material-icons');
+            
+            // Persist collapse state to localStorage
+            const collapsedGroups = JSON.parse(localStorage.getItem('collapsedGroups') || '{}');
+            if (!collapsedGroups[currentListId]) collapsedGroups[currentListId] = {};
+            
             if (itemsContainer.classList.contains('collapsed')) {
                 icon.textContent = 'expand_less';
                 collapseToggle.title = 'Expand group items';
+                collapsedGroups[currentListId][groupId] = true;
             } else {
                 icon.textContent = 'expand_more';
                 collapseToggle.title = 'Collapse group items';
+                collapsedGroups[currentListId][groupId] = false;
             }
+            localStorage.setItem('collapsedGroups', JSON.stringify(collapsedGroups));
         });
 
         // Group items use composite numbering (group#.item#, e.g., "2.1" if group is #2)
