@@ -2062,6 +2062,10 @@ function setupDragAndDrop() {
     
     if (!canEdit) return;
     
+    // Track auto-scroll state
+    let autoScrollInterval = null;
+    let scrollSpeed = 0;
+    
     new Sortable(container, {
         handle: '.drag-handle, .group-drag-handle',
         animation: 150,
@@ -2069,7 +2073,55 @@ function setupDragAndDrop() {
         chosenClass: 'sortable-chosen',
         dragClass: 'sortable-drag',
         filter: '.selection-action-bar', // Don't allow dragging the action bar
+        scroll: true, // Enable built-in scroll
+        scrollSpeed: 10,
+        scrollSensitivity: 50,
+        onMove: function(evt) {
+            // Calculate distance from top (app bar) and bottom of screen
+            const scrollableContainer = container.parentElement || document.documentElement;
+            const rect = container.getBoundingClientRect();
+            const appBarHeight = document.getElementById('app-bar')?.offsetHeight || 64;
+            const windowHeight = window.innerHeight;
+            const edgeThreshold = 120; // pixels from top/bottom to trigger scroll
+            
+            // Distance from top of screen (including app bar area)
+            const distFromTop = evt.clientY;
+            // Distance from bottom of screen
+            const distFromBottom = windowHeight - evt.clientY;
+            
+            // Determine scroll direction and speed based on proximity to edges
+            if (distFromTop < edgeThreshold) {
+                // Near top - scroll up fast
+                scrollSpeed = Math.max(5, 20 - (distFromTop / edgeThreshold) * 15);
+                if (!autoScrollInterval) {
+                    autoScrollInterval = setInterval(() => {
+                        container.scrollTop = Math.max(0, container.scrollTop - scrollSpeed);
+                    }, 30);
+                }
+            } else if (distFromBottom < edgeThreshold) {
+                // Near bottom - scroll down fast
+                scrollSpeed = Math.max(5, 20 - (distFromBottom / edgeThreshold) * 15);
+                if (!autoScrollInterval) {
+                    autoScrollInterval = setInterval(() => {
+                        container.scrollTop += scrollSpeed;
+                    }, 30);
+                }
+            } else {
+                // Not near edge - stop auto-scroll
+                if (autoScrollInterval) {
+                    clearInterval(autoScrollInterval);
+                    autoScrollInterval = null;
+                }
+            }
+        },
         onEnd: async function(evt) {
+            // Stop auto-scroll on drag end
+            if (autoScrollInterval) {
+                clearInterval(autoScrollInterval);
+                autoScrollInterval = null;
+                scrollSpeed = 0;
+            }
+            
             // After any drag end (item or group), rebuild the visible item ID order and persist positions
             try {
                 const visibleIds = [];
