@@ -1363,10 +1363,8 @@ async function persistDomOrder(container) {
             await batch.commit();
         }
 
-        // Offer undo
-        showUndoToast('Order synced.', async () => {
-            await undoLastReorder();
-        });
+        // Keep undo snapshot but do not show a popup; log to console instead
+        console.log('Order synced. Undo snapshot stored on `lastReorderSnapshot`. Call undoLastReorder() to revert.');
     } catch (err) {
         console.error('persistDomOrder error:', err);
         throw err;
