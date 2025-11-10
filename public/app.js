@@ -1183,12 +1183,11 @@ function displayItems(items, groups = {}) {
         );
         const canEdit = isOwner || isCollaborator;
 
-        // Group header
-        const header = document.createElement('div');
-        header.className = 'group-header';
-        const groupImg = group.imageUrl ? `<img src="${group.imageUrl}" alt="${escapeHtml(group.name || 'Group')}" class="group-image" onerror="this.style.display='none'">` : '';
-        const groupName = group.name || 'Untitled Group';
-        const groupDescription = group.description || '';
+    // Group header
+    const header = document.createElement('div');
+    header.className = 'group-header';
+    const groupName = group.name || 'Untitled Group';
+    const groupDescription = group.description || '';
         
         // Create collapse toggle button
         const collapseToggle = document.createElement('button');
@@ -1199,10 +1198,9 @@ function displayItems(items, groups = {}) {
         
         header.innerHTML = `
             <div class="group-header-text">
-                <h3 class="group-title"><span class="group-number">${groupContainer.dataset.groupDisplayNumber}.</span> ${escapeHtml(groupName)}</h3>
+                <h3 class="group-title"><span class="group-number">${groupContainer.dataset.groupDisplayNumber}.</span> ${escapeHtml(groupName)} ${group.imageUrl ? `<img src="${group.imageUrl}" alt="${escapeHtml(group.name || 'Group')}" class="group-image-inline" onerror="this.style.display='none'">` : ''}</h3>
                 ${groupDescription ? `<p class="group-description">${escapeHtml(groupDescription)}</p>` : ''}
             </div>
-            ${groupImg ? `<img src="${groupImg.match(/src="([^"]+)"/)?.[1] || ''}" alt="${escapeHtml(group.name || 'Group')}" class="group-image" onerror="this.style.display='none'">` : ''}
             <div class="group-actions">
                 ${canEdit ? `
                     <button class="icon-button group-drag-handle" title="Drag to reorder">
