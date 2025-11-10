@@ -1925,22 +1925,28 @@ async function moveGroupToPosition(groupId, rawPosition) {
         // Others are non-group items
         const others = allItems.filter(it => it.groupId !== groupId);
 
-        // Map baseAbsolute to insertion index in others array
+        // Map baseAbsolute to insertion index in others array considering visibility
         let insertionIndex = others.length;
         if (baseAbsolute <= allItems.length) {
-            const targetAllIdx = Math.max(0, baseAbsolute - 1);
-            const targetItemId = allItems[targetAllIdx]?.id;
-            const idxInOthers = targetItemId ? others.findIndex(it => it.id === targetItemId) : -1;
-            if (idxInOthers !== -1) {
-                insertionIndex = idxInOthers;
-            } else {
-                let foundIdx = -1;
-                for (let i = targetAllIdx; i < allItems.length; i++) {
-                    const id = allItems[i].id;
-                    const j = others.findIndex(it => it.id === id);
-                    if (j !== -1) { foundIdx = j; break; }
+            // Filter to only visible items
+            const visibleItems = allItems.filter(it => !it.bought || showBoughtItems);
+            const targetVisibleIdx = Math.max(0, baseAbsolute - 1);
+            
+            // Find the corresponding item in the full list
+            const targetItem = visibleItems[targetVisibleIdx];
+            if (targetItem) {
+                const idxInOthers = others.findIndex(it => it.id === targetItem.id);
+                if (idxInOthers !== -1) {
+                    insertionIndex = idxInOthers;
+                } else {
+                    // Find the next visible item that's in others
+                    let foundIdx = -1;
+                    for (let i = targetVisibleIdx; i < visibleItems.length; i++) {
+                        const j = others.findIndex(it => it.id === visibleItems[i].id);
+                        if (j !== -1) { foundIdx = j; break; }
+                    }
+                    insertionIndex = foundIdx !== -1 ? foundIdx : others.length;
                 }
-                insertionIndex = foundIdx !== -1 ? foundIdx : others.length;
             }
         } else {
             insertionIndex = others.length;
@@ -2001,17 +2007,36 @@ function setupDragAndDrop() {
             // After any drag end (item or group), rebuild the visible item ID order and persist positions
             try {
                 const visibleIds = [];
+                const groupPositions = new Map();
+                let groupOrder = 1;
+                
                 // Walk through children in container order; expand groups into their item ids
                 Array.from(container.children).forEach(child => {
                     if (child.classList.contains('item-card')) {
                         if (child.dataset && child.dataset.itemId) visibleIds.push(child.dataset.itemId);
                     } else if (child.classList.contains('group-container')) {
+                        const groupId = child.dataset.groupId;
+                        if (groupId) {
+                            groupPositions.set(groupId, groupOrder++);
+                        }
                         // group-container may contain item-cards as direct children
                         Array.from(child.querySelectorAll('.item-card')).forEach(ic => {
                             if (ic.dataset && ic.dataset.itemId) visibleIds.push(ic.dataset.itemId);
                         });
                     }
                 });
+
+                // Update group positions in database
+                const groupsRef = firebaseDb.collection('lists').doc(currentListId).collection('groups');
+                const batch = firebaseDb.batch();
+                groupPositions.forEach((position, groupId) => {
+                    batch.update(groupsRef.doc(groupId), {
+                        position,
+                        displayOrder: position,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                });
+                await batch.commit();
 
                 // Persist DOM order including groups (handles empty groups now)
                 await persistDomOrder(container);
