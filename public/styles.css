@@ -1212,6 +1212,24 @@ input:checked + .slider:before {
   transform: rotate(5deg);
 }
 
+/* Sync indicator */
+.sync-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  margin-right: 12px;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.9);
+  border-radius: 12px;
+  font-size: 0.875rem;
+}
+.sync-indicator #syncSpinner {
+  display: inline-block;
+  transform-origin: center;
+  animation: spin 1s linear infinite;
+}
+
 /* Print styles */
 @media print {
   .app-bar,

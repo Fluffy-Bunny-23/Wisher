@@ -21,6 +21,50 @@ const menuButton = document.getElementById('menuButton'); // Assuming you have a
 const mainContent = document.querySelector('.main-content'); // Or the main container that needs to shift
 const appBar = document.getElementById('app-bar');
 
+// Snapshot used for undoing the last large reorder operation
+let lastReorderSnapshot = null;
+
+function showSyncIndicator() {
+    const el = document.getElementById('syncIndicator');
+    if (el) el.classList.remove('hidden');
+}
+
+function hideSyncIndicator() {
+    const el = document.getElementById('syncIndicator');
+    if (el) el.classList.add('hidden');
+}
+
+function showUndoToast(message, undoCallback) {
+    // Create a toast with an Undo button
+    const toast = document.createElement('div');
+    toast.className = 'toast success';
+    const msg = document.createElement('span');
+    msg.textContent = message + ' ';
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-text';
+    btn.textContent = 'Undo';
+    btn.addEventListener('click', async () => {
+        try {
+            await undoCallback();
+            toast.remove();
+        } catch (err) {
+            console.error('Undo failed:', err);
+            showToast('Undo failed: ' + (err.message || err), 'error');
+        }
+    });
+    toast.appendChild(msg);
+    toast.appendChild(btn);
+    document.getElementById('toastContainer').appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 100);
+    // Auto-remove after 8s
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }
+    }, 8000);
+}
+
 function setupAuthStateListener() {
     console.log('Setting up auth state listener');
     
@@ -1149,6 +1193,9 @@ function displayItems(items, groups = {}) {
             </div>
             <div class="group-actions">
                 ${canEdit ? `
+                    <button class="icon-button group-drag-handle" title="Drag to reorder">
+                        <span class="material-icons">drag_indicator</span>
+                    </button>
                     <button class="icon-button" onclick="editGroup('${groupId}')" title="Edit Group">
                         <span class="material-icons">edit</span>
                     </button>
@@ -1211,10 +1258,8 @@ function displayItems(items, groups = {}) {
     // Only attempt to write if the current user can edit the list (owner or collaborator).
     try {
         if (canEdit && firebaseDb && currentListId) {
-            const visibleIds = Array.from(container.querySelectorAll('.item-card')).map(c => c.dataset.itemId).filter(Boolean);
-            if (visibleIds.length > 0) {
-                persistVisibleOrderToDb(visibleIds).catch(err => console.error('Error persisting order to DB:', err));
-            }
+            // Persist DOM order including groups (handles empty groups now)
+            persistDomOrder(container).catch(err => console.error('Error persisting order to DB:', err));
         }
     } catch (err) {
         console.error('Error during persistence step:', err);
@@ -1241,6 +1286,117 @@ async function persistVisibleOrderToDb(orderedItemIds) {
             });
         });
         await batch.commit();
+    }
+}
+
+// Persist ordering based on DOM structure, keeping group blocks and empty groups in mind.
+// This writes back numeric positions for items and a `position` field for groups indicating their block order.
+async function persistDomOrder(container) {
+    if (!currentListId || !firebaseDb) return;
+    showSyncIndicator();
+    try {
+        const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+        const groupsRef = firebaseDb.collection('lists').doc(currentListId).collection('groups');
+
+        const itemsSequence = [];
+        const groupBlockPositions = {}; // gid -> blockIndex (1-based)
+        let blockIndex = 1;
+
+        Array.from(container.children).forEach(child => {
+            if (child.classList.contains('item-card')) {
+                if (child.dataset && child.dataset.itemId) itemsSequence.push(child.dataset.itemId);
+            } else if (child.classList.contains('group-container')) {
+                const gid = child.dataset.groupId;
+                if (gid) {
+                    groupBlockPositions[gid] = blockIndex++;
+                }
+                Array.from(child.querySelectorAll('.item-card')).forEach(ic => {
+                    if (ic.dataset && ic.dataset.itemId) itemsSequence.push(ic.dataset.itemId);
+                });
+            }
+        });
+
+        // Prepare snapshot for undo by reading current positions
+        const itemDocPromises = itemsSequence.map(id => itemsRef.doc(id).get());
+        const groupDocPromises = Object.keys(groupBlockPositions).map(gid => groupsRef.doc(gid).get());
+
+        const [itemDocs, groupDocs] = await Promise.all([
+            Promise.all(itemDocPromises),
+            Promise.all(groupDocPromises)
+        ]);
+
+        const prevItems = itemDocs.map(d => ({ id: d.id, position: d.exists ? d.data().position : null }));
+        const groupIds = Object.keys(groupBlockPositions);
+        const prevGroups = groupDocs.map(d => ({ id: d.id, position: d.exists ? d.data().position : null }));
+
+        // Build writes: items get positions 1..N in sequence
+        const itemUpdates = itemsSequence.map((id, idx) => ({ id, position: idx + 1 }));
+        const groupUpdates = groupIds.map(gid => ({ id: gid, position: groupBlockPositions[gid] }));
+
+        // Store snapshot for undo
+        lastReorderSnapshot = { items: prevItems, groups: prevGroups };
+
+        // Perform batched writes (items + groups), chunking to avoid batch limits
+        const allWrites = [];
+        const itemsRefPath = itemsRef; // for clarity
+        const groupsRefPath = groupsRef;
+
+        itemUpdates.forEach(u => allWrites.push({ ref: itemsRefPath.doc(u.id), data: { position: u.position, updatedAt: firebase.firestore.FieldValue.serverTimestamp() } }));
+        groupUpdates.forEach(u => allWrites.push({ ref: groupsRefPath.doc(u.id), data: { position: u.position, updatedAt: firebase.firestore.FieldValue.serverTimestamp() } }));
+
+        const CHUNK = 400;
+        for (let i = 0; i < allWrites.length; i += CHUNK) {
+            const chunk = allWrites.slice(i, i + CHUNK);
+            const batch = firebaseDb.batch();
+            chunk.forEach(w => batch.update(w.ref, w.data));
+            await batch.commit();
+        }
+
+        // Offer undo
+        showUndoToast('Order synced.', async () => {
+            await undoLastReorder();
+        });
+    } catch (err) {
+        console.error('persistDomOrder error:', err);
+        throw err;
+    } finally {
+        hideSyncIndicator();
+    }
+}
+
+async function undoLastReorder() {
+    if (!lastReorderSnapshot) {
+        showToast('Nothing to undo', 'warning');
+        return;
+    }
+    showSyncIndicator();
+    try {
+        const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+        const groupsRef = firebaseDb.collection('lists').doc(currentListId).collection('groups');
+
+        const itemWrites = lastReorderSnapshot.items || [];
+        const groupWrites = lastReorderSnapshot.groups || [];
+
+        const all = [];
+        itemWrites.forEach(u => all.push({ ref: itemsRef.doc(u.id), data: { position: u.position, updatedAt: firebase.firestore.FieldValue.serverTimestamp() } }));
+        groupWrites.forEach(u => all.push({ ref: groupsRef.doc(u.id), data: { position: u.position, updatedAt: firebase.firestore.FieldValue.serverTimestamp() } }));
+
+        const CHUNK = 400;
+        for (let i = 0; i < all.length; i += CHUNK) {
+            const chunk = all.slice(i, i + CHUNK);
+            const batch = firebaseDb.batch();
+            chunk.forEach(w => batch.update(w.ref, w.data));
+            await batch.commit();
+        }
+
+        showToast('Reorder undone', 'success');
+        await loadListItems(currentListId);
+        lastReorderSnapshot = null;
+    } catch (err) {
+        console.error('undoLastReorder error:', err);
+        showToast('Undo failed: ' + (err.message || err), 'error');
+    } finally {
+        hideSyncIndicator();
     }
 }
 
@@ -1723,6 +1879,96 @@ async function moveSelectedItemsToPosition(rawPosition) {
     }
 }
 
+// Move an entire group's items as a contiguous block to the requested position (composite like "2.1" or absolute like "7").
+async function moveGroupToPosition(groupId, rawPosition) {
+    if (!currentListId) {
+        showToast('No active list selected', 'error');
+        return;
+    }
+    const isOwner = currentUser && currentUser.email === currentList.owner;
+    const collaboratorsField = currentList.collaborators || [];
+    const isCollaborator = currentUser && (
+        Array.isArray(collaboratorsField)
+            ? collaboratorsField.includes(currentUser.email)
+            : typeof collaboratorsField === 'object' && collaboratorsField !== null
+                ? Object.values(collaboratorsField).includes(currentUser.email)
+                : false
+    );
+    const canEdit = isOwner || isCollaborator;
+    if (!canEdit) {
+        showToast('You don\'t have permission to move groups', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+        const baseAbsolute = await parseCompositeOrAbsolutePosition(String(rawPosition || '').trim(), itemsRef);
+
+        // Fetch current ordering
+        const snap = await itemsRef.orderBy('position', 'asc').get();
+        const allItems = [];
+        snap.forEach(doc => allItems.push({ id: doc.id, ...doc.data() }));
+
+        // Extract group items in current order
+        const selectedOrdered = allItems.filter(it => it.groupId === groupId);
+        if (selectedOrdered.length === 0) {
+            showToast('Group has no items to move', 'warning');
+            hideLoading();
+            return;
+        }
+
+        // Others are non-group items
+        const others = allItems.filter(it => it.groupId !== groupId);
+
+        // Map baseAbsolute to insertion index in others array
+        let insertionIndex = others.length;
+        if (baseAbsolute <= allItems.length) {
+            const targetAllIdx = Math.max(0, baseAbsolute - 1);
+            const targetItemId = allItems[targetAllIdx]?.id;
+            const idxInOthers = targetItemId ? others.findIndex(it => it.id === targetItemId) : -1;
+            if (idxInOthers !== -1) {
+                insertionIndex = idxInOthers;
+            } else {
+                let foundIdx = -1;
+                for (let i = targetAllIdx; i < allItems.length; i++) {
+                    const id = allItems[i].id;
+                    const j = others.findIndex(it => it.id === id);
+                    if (j !== -1) { foundIdx = j; break; }
+                }
+                insertionIndex = foundIdx !== -1 ? foundIdx : others.length;
+            }
+        } else {
+            insertionIndex = others.length;
+        }
+
+        // Build new order
+        const newOrder = [
+            ...others.slice(0, insertionIndex),
+            ...selectedOrdered,
+            ...others.slice(insertionIndex)
+        ];
+
+        // Persist positions
+        const batch = firebaseDb.batch();
+        newOrder.forEach((it, idx) => {
+            batch.update(itemsRef.doc(it.id), {
+                position: idx + 1,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+        await batch.commit();
+
+        showToast('Group moved successfully', 'success');
+        await loadListItems(currentListId);
+    } catch (err) {
+        console.error('Error moving group:', err);
+        showToast('Error moving group: ' + (err.message || err), 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
 function setupDragAndDrop() {
     const container = document.getElementById('itemsContainer');
     if (container.children.length === 0) return;
@@ -1741,21 +1987,34 @@ function setupDragAndDrop() {
     if (!canEdit) return;
     
     new Sortable(container, {
-        handle: '.drag-handle',
+        handle: '.drag-handle, .group-drag-handle',
         animation: 150,
         ghostClass: 'sortable-ghost',
         chosenClass: 'sortable-chosen',
         dragClass: 'sortable-drag',
         filter: '.selection-action-bar', // Don't allow dragging the action bar
         onEnd: async function(evt) {
-            const itemId = evt.item.dataset.itemId;
-            const newPosition = evt.newIndex + 1;
-            
+            // After any drag end (item or group), rebuild the visible item ID order and persist positions
             try {
-                await updateItemPosition(itemId, newPosition);
-                showToast('Item position updated', 'success');
+                const visibleIds = [];
+                // Walk through children in container order; expand groups into their item ids
+                Array.from(container.children).forEach(child => {
+                    if (child.classList.contains('item-card')) {
+                        if (child.dataset && child.dataset.itemId) visibleIds.push(child.dataset.itemId);
+                    } else if (child.classList.contains('group-container')) {
+                        // group-container may contain item-cards as direct children
+                        Array.from(child.querySelectorAll('.item-card')).forEach(ic => {
+                            if (ic.dataset && ic.dataset.itemId) visibleIds.push(ic.dataset.itemId);
+                        });
+                    }
+                });
+
+                // Persist DOM order including groups (handles empty groups now)
+                await persistDomOrder(container);
+                showToast('Order updated', 'success');
             } catch (error) {
-                showToast('Error updating position: ' + error.message, 'error');
+                console.error('Error persisting order after drag:', error);
+                showToast('Error updating order: ' + (error.message || error), 'error');
                 // Reload items to reset positions
                 loadListItems(currentListId);
             }
@@ -1942,17 +2201,30 @@ async function saveGroup() {
         const groupRef = firebaseDb.collection('lists').doc(currentListId).collection('groups');
 
         const form = document.getElementById('groupForm');
+        let createdOrUpdatedGroupId = null;
         if (form.dataset.mode === 'edit' && form.dataset.groupId) {
             const { createdAt, ...updateData } = groupData;
             await groupRef.doc(form.dataset.groupId).update(updateData);
+            createdOrUpdatedGroupId = form.dataset.groupId;
             showToast('Group updated!', 'success');
         } else {
-            await groupRef.add(groupData);
+            const docRef = await groupRef.add(groupData);
+            createdOrUpdatedGroupId = docRef.id;
             showToast('Group added!', 'success');
         }
 
+        // Optionally relocate group based on user input in the modal
+        const rawPos = (document.getElementById('groupPosition') && document.getElementById('groupPosition').value || '').trim();
         hideModal('groupModal');
-        // Refresh items view (groups rendering to be added in next steps)
+        if (rawPos && createdOrUpdatedGroupId) {
+            try {
+                await moveGroupToPosition(createdOrUpdatedGroupId, rawPos);
+            } catch (err) {
+                console.error('Error moving group after save:', err);
+                showToast('Group saved but error moving group: ' + (err.message || err), 'error');
+            }
+        }
+        // Refresh view to reflect changes
         await loadListItems(currentListId);
     } catch (err) {
         console.error('Error saving group:', err);
