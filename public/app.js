@@ -1166,6 +1166,11 @@ function displayItems(items, groups = {}) {
         const groupContainer = document.createElement('div');
         groupContainer.className = 'group-container';
         groupContainer.dataset.groupId = groupId;
+        
+        // Get the display order from the group data
+        const displayNo = group.displayOrder || groupDisplayIndex[groupId] || displayCounter++;
+        groupDisplayIndex[groupId] = displayNo;
+        groupContainer.dataset.groupDisplayNumber = displayNo;
 
         const isOwner = currentUser && currentUser.email === currentList.owner;
         const collaboratorsField = currentList.collaborators || [];
@@ -1182,13 +1187,12 @@ function displayItems(items, groups = {}) {
         const header = document.createElement('div');
         header.className = 'group-header';
         const groupImg = group.imageUrl ? `<img src="${group.imageUrl}" alt="${escapeHtml(group.name || 'Group')}" class="group-image" onerror="this.style.display='none'">` : '';
-    const displayNo = groupDisplayIndex[groupId] || displayCounter;
         const groupName = group.name || 'Untitled Group';
         const groupDescription = group.description || '';
         header.innerHTML = `
             ${groupImg}
             <div class="group-header-text">
-                <h3 class="group-title"><span class="group-number">${displayNo}.</span> ${escapeHtml(groupName)}</h3>
+                <h3 class="group-title"><span class="group-number">${groupContainer.dataset.groupDisplayNumber}.</span> ${escapeHtml(groupName)}</h3>
                 ${groupDescription ? `<p class="group-description">${escapeHtml(groupDescription)}</p>` : ''}
             </div>
             <div class="group-actions">
@@ -1331,11 +1335,14 @@ async function persistDomOrder(container) {
 
         // Build writes: items get positions 1..N in sequence
         const itemUpdates = itemsSequence.map((id, idx) => ({ id, position: idx + 1 }));
-        const groupUpdates = groupIds.map(gid => ({ 
-            id: gid, 
-            position: groupBlockPositions[gid],
-            displayOrder: Object.values(groupBlockPositions).findIndex(pos => pos === groupBlockPositions[gid]) + 1
-        }));
+        let displayOrder = 1;
+        const groupUpdates = groupIds
+            .sort((a, b) => groupBlockPositions[a] - groupBlockPositions[b])
+            .map(gid => ({ 
+                id: gid, 
+                position: groupBlockPositions[gid],
+                displayOrder: displayOrder++
+            }));
 
         // Store snapshot for undo
         lastReorderSnapshot = { items: prevItems, groups: prevGroups };
@@ -1969,6 +1976,22 @@ async function moveGroupToPosition(groupId, rawPosition) {
         });
         await batch.commit();
 
+        // Update displayOrder for groups based on their new positions
+        const groupsRef = firebaseDb.collection('lists').doc(currentListId).collection('groups');
+        const groupsBatch = firebaseDb.batch();
+        const groupDocs = await groupsRef.get();
+        const groupsInOrder = Array.from(groupDocs.docs)
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .sort((a, b) => a.position - b.position);
+        
+        groupsInOrder.forEach((group, idx) => {
+            groupsBatch.update(groupsRef.doc(group.id), {
+                displayOrder: idx + 1,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+        await groupsBatch.commit();
+
         showToast('Group moved successfully', 'success');
         await loadListItems(currentListId);
     } catch (err) {
@@ -2017,7 +2040,16 @@ function setupDragAndDrop() {
                     } else if (child.classList.contains('group-container')) {
                         const groupId = child.dataset.groupId;
                         if (groupId) {
+                            // Update the visible group number in the DOM
+                            const header = child.querySelector('.group-title');
+                            if (header) {
+                                const groupNumber = header.querySelector('.group-number');
+                                if (groupNumber) {
+                                    groupNumber.textContent = `${groupOrder}.`;
+                                }
+                            }
                             groupPositions.set(groupId, groupOrder++);
+                            child.dataset.groupDisplayNumber = groupOrder - 1;
                         }
                         // group-container may contain item-cards as direct children
                         Array.from(child.querySelectorAll('.item-card')).forEach(ic => {
