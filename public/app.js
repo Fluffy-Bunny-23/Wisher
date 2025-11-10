@@ -1139,7 +1139,7 @@ function displayItems(items, groups = {}) {
     const renderedGroups = new Set();
 
     // Shared sequential display counter for both items and groups (display-only)
-    // This ensures groups take a number in the same sequence as items
+    // This ensures groups and items are numbered in the same sequence: 1=item, 2=group, 3=item, 4=group, etc.
     const groupDisplayIndex = {};
     let displayCounter = 1;
 
@@ -1167,8 +1167,8 @@ function displayItems(items, groups = {}) {
         groupContainer.className = 'group-container';
         groupContainer.dataset.groupId = groupId;
         
-        // Get the display order from the group data
-        const displayNo = group.displayOrder || groupDisplayIndex[groupId] || displayCounter++;
+        // Assign the group a display number from the shared sequence (just like an item gets one)
+        const displayNo = displayCounter++;
         groupDisplayIndex[groupId] = displayNo;
         groupContainer.dataset.groupDisplayNumber = displayNo;
 
@@ -1214,13 +1214,7 @@ function displayItems(items, groups = {}) {
         `;
         groupContainer.appendChild(header);
 
-        // Assign group display number if first time rendering using shared counter
-        if (!groupDisplayIndex[groupId]) {
-            groupDisplayIndex[groupId] = displayCounter++;
-        }
-        groupContainer.dataset.groupDisplayNumber = groupDisplayIndex[groupId];
-
-        // Group items
+        // Group items use composite numbering (group#.item#, e.g., "2.1" if group is #2)
         groupItems.forEach((item, idx) => {
             const compositeLabel = `${groupDisplayIndex[groupId]}.${idx + 1}`;
             const itemCard = createItemCard(item, compositeLabel);
@@ -1303,16 +1297,20 @@ async function persistDomOrder(container) {
         const groupsRef = firebaseDb.collection('lists').doc(currentListId).collection('groups');
 
         const itemsSequence = [];
-        const groupBlockPositions = {}; // gid -> blockIndex (1-based)
+        const groupSequenceNumbers = {}; // gid -> sequenceNumber (0-based for items, both items and groups in order)
         let blockIndex = 1;
+        let sequenceNum = 1;
 
         Array.from(container.children).forEach(child => {
             if (child.classList.contains('item-card')) {
                 if (child.dataset && child.dataset.itemId) itemsSequence.push(child.dataset.itemId);
+                sequenceNum++;
             } else if (child.classList.contains('group-container')) {
                 const gid = child.dataset.groupId;
                 if (gid) {
-                    groupBlockPositions[gid] = blockIndex++;
+                    groupSequenceNumbers[gid] = sequenceNum;
+                    blockIndex++;
+                    sequenceNum++;
                 }
                 Array.from(child.querySelectorAll('.item-card')).forEach(ic => {
                     if (ic.dataset && ic.dataset.itemId) itemsSequence.push(ic.dataset.itemId);
@@ -1322,7 +1320,7 @@ async function persistDomOrder(container) {
 
         // Prepare snapshot for undo by reading current positions
         const itemDocPromises = itemsSequence.map(id => itemsRef.doc(id).get());
-        const groupDocPromises = Object.keys(groupBlockPositions).map(gid => groupsRef.doc(gid).get());
+        const groupDocPromises = Object.keys(groupSequenceNumbers).map(gid => groupsRef.doc(gid).get());
 
         const [itemDocs, groupDocs] = await Promise.all([
             Promise.all(itemDocPromises),
@@ -1330,19 +1328,16 @@ async function persistDomOrder(container) {
         ]);
 
         const prevItems = itemDocs.map(d => ({ id: d.id, position: d.exists ? d.data().position : null }));
-        const groupIds = Object.keys(groupBlockPositions);
+        const groupIds = Object.keys(groupSequenceNumbers);
         const prevGroups = groupDocs.map(d => ({ id: d.id, position: d.exists ? d.data().position : null }));
 
         // Build writes: items get positions 1..N in sequence
         const itemUpdates = itemsSequence.map((id, idx) => ({ id, position: idx + 1 }));
-        let displayOrder = 1;
-        const groupUpdates = groupIds
-            .sort((a, b) => groupBlockPositions[a] - groupBlockPositions[b])
-            .map(gid => ({ 
-                id: gid, 
-                position: groupBlockPositions[gid],
-                displayOrder: displayOrder++
-            }));
+        const groupUpdates = groupIds.map(gid => ({ 
+            id: gid, 
+            position: groupSequenceNumbers[gid],
+            displayOrder: groupSequenceNumbers[gid]
+        }));
 
         // Store snapshot for undo
         lastReorderSnapshot = { items: prevItems, groups: prevGroups };
@@ -2029,12 +2024,17 @@ function setupDragAndDrop() {
             try {
                 const visibleIds = [];
                 const groupPositions = new Map();
-                let groupOrder = 1;
+                let sequenceNumber = 1;
                 
                 // Walk through children in container order; expand groups into their item ids
+                // Assign sequential numbers to both items and groups as they appear
                 Array.from(container.children).forEach(child => {
                     if (child.classList.contains('item-card')) {
                         if (child.dataset && child.dataset.itemId) visibleIds.push(child.dataset.itemId);
+                        // Update item position display
+                        const posEl = child.querySelector('.item-position');
+                        if (posEl) posEl.textContent = String(sequenceNumber);
+                        sequenceNumber++;
                     } else if (child.classList.contains('group-container')) {
                         const groupId = child.dataset.groupId;
                         if (groupId) {
@@ -2043,11 +2043,12 @@ function setupDragAndDrop() {
                             if (header) {
                                 const groupNumber = header.querySelector('.group-number');
                                 if (groupNumber) {
-                                    groupNumber.textContent = `${groupOrder}.`;
+                                    groupNumber.textContent = `${sequenceNumber}.`;
                                 }
                             }
-                            groupPositions.set(groupId, groupOrder++);
-                            child.dataset.groupDisplayNumber = groupOrder - 1;
+                            groupPositions.set(groupId, sequenceNumber);
+                            child.dataset.groupDisplayNumber = sequenceNumber;
+                            sequenceNumber++;
                         }
                         // group-container may contain item-cards as direct children
                         Array.from(child.querySelectorAll('.item-card')).forEach(ic => {
