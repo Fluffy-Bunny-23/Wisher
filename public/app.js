@@ -1189,12 +1189,20 @@ function displayItems(items, groups = {}) {
         const groupImg = group.imageUrl ? `<img src="${group.imageUrl}" alt="${escapeHtml(group.name || 'Group')}" class="group-image" onerror="this.style.display='none'">` : '';
         const groupName = group.name || 'Untitled Group';
         const groupDescription = group.description || '';
+        
+        // Create collapse toggle button
+        const collapseToggle = document.createElement('button');
+        collapseToggle.className = 'icon-button group-collapse-toggle';
+        collapseToggle.title = 'Toggle group items visibility';
+        collapseToggle.innerHTML = `<span class="material-icons">expand_more</span>`;
+        collapseToggle.style.order = '-1'; // Position before other elements
+        
         header.innerHTML = `
-            ${groupImg}
             <div class="group-header-text">
                 <h3 class="group-title"><span class="group-number">${groupContainer.dataset.groupDisplayNumber}.</span> ${escapeHtml(groupName)}</h3>
                 ${groupDescription ? `<p class="group-description">${escapeHtml(groupDescription)}</p>` : ''}
             </div>
+            ${groupImg ? `<img src="${groupImg.match(/src="([^"]+)"/)?.[1] || ''}" alt="${escapeHtml(group.name || 'Group')}" class="group-image" onerror="this.style.display='none'">` : ''}
             <div class="group-actions">
                 ${canEdit ? `
                     <button class="icon-button group-drag-handle" title="Drag to reorder">
@@ -1213,14 +1221,38 @@ function displayItems(items, groups = {}) {
             </div>
         `;
         groupContainer.appendChild(header);
+        
+        // Prepend collapse toggle before other elements
+        header.insertAdjacentElement('afterbegin', collapseToggle);
+
+        // Create items container that can be collapsed
+        const itemsContainer = document.createElement('div');
+        itemsContainer.className = 'group-items-container';
+        itemsContainer.dataset.groupId = groupId;
+        
+        // Add collapse toggle event listener
+        collapseToggle.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            itemsContainer.classList.toggle('collapsed');
+            const icon = collapseToggle.querySelector('.material-icons');
+            if (itemsContainer.classList.contains('collapsed')) {
+                icon.textContent = 'expand_less';
+                collapseToggle.title = 'Expand group items';
+            } else {
+                icon.textContent = 'expand_more';
+                collapseToggle.title = 'Collapse group items';
+            }
+        });
 
         // Group items use composite numbering (group#.item#, e.g., "2.1" if group is #2)
         groupItems.forEach((item, idx) => {
             const compositeLabel = `${groupDisplayIndex[groupId]}.${idx + 1}`;
             const itemCard = createItemCard(item, compositeLabel);
-            groupContainer.appendChild(itemCard);
+            itemsContainer.appendChild(itemCard);
         });
 
+        groupContainer.appendChild(itemsContainer);
         container.appendChild(groupContainer);
         renderedGroups.add(groupId);
     }
@@ -1312,9 +1344,12 @@ async function persistDomOrder(container) {
                     blockIndex++;
                     sequenceNum++;
                 }
-                Array.from(child.querySelectorAll('.item-card')).forEach(ic => {
-                    if (ic.dataset && ic.dataset.itemId) itemsSequence.push(ic.dataset.itemId);
-                });
+                const itemsContainer = child.querySelector('.group-items-container');
+                if (itemsContainer) {
+                    Array.from(itemsContainer.querySelectorAll('.item-card')).forEach(ic => {
+                        if (ic.dataset && ic.dataset.itemId) itemsSequence.push(ic.dataset.itemId);
+                    });
+                }
             }
         });
 
@@ -2050,10 +2085,13 @@ function setupDragAndDrop() {
                             child.dataset.groupDisplayNumber = sequenceNumber;
                             sequenceNumber++;
                         }
-                        // group-container may contain item-cards as direct children
-                        Array.from(child.querySelectorAll('.item-card')).forEach(ic => {
-                            if (ic.dataset && ic.dataset.itemId) visibleIds.push(ic.dataset.itemId);
-                        });
+                        // group-items-container may contain item-cards as direct children
+                        const itemsContainer = child.querySelector('.group-items-container');
+                        if (itemsContainer) {
+                            Array.from(itemsContainer.querySelectorAll('.item-card')).forEach(ic => {
+                                if (ic.dataset && ic.dataset.itemId) visibleIds.push(ic.dataset.itemId);
+                            });
+                        }
                     }
                 });
 
