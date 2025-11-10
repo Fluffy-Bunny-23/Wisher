@@ -1189,39 +1189,33 @@ function displayItems(items, groups = {}) {
     const groupName = group.name || 'Untitled Group';
     const groupDescription = group.description || '';
         
-        // Create collapse toggle button
-        const collapseToggle = document.createElement('button');
-        collapseToggle.className = 'icon-button group-collapse-toggle';
-        collapseToggle.title = 'Toggle group items visibility';
-        collapseToggle.innerHTML = `<span class="material-icons">expand_more</span>`;
-        collapseToggle.style.order = '-1'; // Position before other elements
+            header.innerHTML = `
+                <div class="group-header-left">
+                    <h3 class="group-title"><span class="group-number">${groupContainer.dataset.groupDisplayNumber}.</span> ${escapeHtml(groupName)} ${group.imageUrl ? `<img src="${group.imageUrl}" alt="${escapeHtml(group.name || 'Group')}" class="group-image-inline" onerror="this.style.display='none'">` : ''}</h3>
+                    ${groupDescription ? `<p class="group-description">${escapeHtml(groupDescription)}</p>` : ''}
+                </div>
+                <div class="group-actions">
+                    ${canEdit ? `
+                        <button class="icon-button group-drag-handle" title="Drag to reorder">
+                            <span class="material-icons">drag_indicator</span>
+                        </button>
+                        <button class="icon-button" onclick="editGroup('${groupId}')" title="Edit Group">
+                            <span class="material-icons">edit</span>
+                        </button>
+                        <button class="icon-button" onclick="deleteGroup('${groupId}', '${escapeHtml(groupName)}')" title="Delete Group">
+                            <span class="material-icons">delete</span>
+                        </button>
+                    ` : ''}
+                    <button class="icon-button" onclick="showGroupInfo('${groupId}')" title="Group Info">
+                        <span class="material-icons">info</span>
+                    </button>
+                </div>
+            `;
+            groupContainer.appendChild(header);
         
-        header.innerHTML = `
-            <div class="group-header-text">
-                <h3 class="group-title"><span class="group-number">${groupContainer.dataset.groupDisplayNumber}.</span> ${escapeHtml(groupName)} ${group.imageUrl ? `<img src="${group.imageUrl}" alt="${escapeHtml(group.name || 'Group')}" class="group-image-inline" onerror="this.style.display='none'">` : ''}</h3>
-                ${groupDescription ? `<p class="group-description">${escapeHtml(groupDescription)}</p>` : ''}
-            </div>
-            <div class="group-actions">
-                ${canEdit ? `
-                    <button class="icon-button group-drag-handle" title="Drag to reorder">
-                        <span class="material-icons">drag_indicator</span>
-                    </button>
-                    <button class="icon-button" onclick="editGroup('${groupId}')" title="Edit Group">
-                        <span class="material-icons">edit</span>
-                    </button>
-                    <button class="icon-button" onclick="deleteGroup('${groupId}', '${escapeHtml(groupName)}')" title="Delete Group">
-                        <span class="material-icons">delete</span>
-                    </button>
-                ` : ''}
-                <button class="icon-button" onclick="showGroupInfo('${groupId}')" title="Group Info">
-                    <span class="material-icons">info</span>
-                </button>
-            </div>
-        `;
-        groupContainer.appendChild(header);
-        
-        // Prepend collapse toggle before other elements
-        header.insertAdjacentElement('afterbegin', collapseToggle);
+            // Insert collapse toggle at the start of the left area so it flows naturally
+            const leftArea = header.querySelector('.group-header-left') || header;
+            leftArea.insertAdjacentElement('afterbegin', collapseToggle);
 
         // Create items container that can be collapsed
         const itemsContainer = document.createElement('div');
