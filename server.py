@@ -101,9 +101,10 @@ def main():
         print(f"Error: Port {port} is already in use. Another server appears to be running.", file=sys.stderr)
         sys.exit(1)
     
-    # Change to the directory containing this script
+    # Change to the public directory to serve static files
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(script_dir)
+    public_dir = os.path.join(script_dir, 'public')
+    os.chdir(public_dir)
     
     # Store header lines globally
     global HEADER_LINES

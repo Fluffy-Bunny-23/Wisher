@@ -1331,7 +1331,11 @@ async function persistDomOrder(container) {
 
         // Build writes: items get positions 1..N in sequence
         const itemUpdates = itemsSequence.map((id, idx) => ({ id, position: idx + 1 }));
-        const groupUpdates = groupIds.map(gid => ({ id: gid, position: groupBlockPositions[gid] }));
+        const groupUpdates = groupIds.map(gid => ({ 
+            id: gid, 
+            position: groupBlockPositions[gid],
+            displayOrder: Object.values(groupBlockPositions).findIndex(pos => pos === groupBlockPositions[gid]) + 1
+        }));
 
         // Store snapshot for undo
         lastReorderSnapshot = { items: prevItems, groups: prevGroups };
