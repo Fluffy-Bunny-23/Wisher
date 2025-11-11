@@ -1553,8 +1553,8 @@ function createItemCard(item, position) {
     
     // Add click event listener to handle selection and show info modal
     contentWrapper.addEventListener('click', (e) => {
-        // Don't trigger if clicking on a button or link
-        if (!e.target.closest('button') && !e.target.closest('a')) {
+        // Don't trigger if clicking on a button, link, or comments section
+        if (!e.target.closest('button') && !e.target.closest('a') && !e.target.closest('.comments-section')) {
             if (e.ctrlKey || e.shiftKey) {
                 handleItemSelection(item.id, e.ctrlKey, e.shiftKey);
             } else {
@@ -2715,14 +2715,7 @@ async function addComment(itemId) {
             ? Object.values(collaboratorsField).includes(currentUser.email)
             : false;
     
-    // Check if user is accessing as a viewer via share link
-    const isViewerViaShare = currentListRole === 'viewer';
-    
-    // Allow comments if user is not owner/collaborator OR if they're accessing as viewer via share link
-    if (isOwner || (isCollaborator && !isViewerViaShare)) {
-        showToast('Only viewers can add comments', 'error');
-        return;
-    }
+
     
     const commentInput = document.getElementById(`comment-input-${itemId}`);
     if (!commentInput) {
