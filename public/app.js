@@ -1000,7 +1000,7 @@ function displayList(list) {
     // Show/hide viewer mode toggle for owners/collaborators
     const viewerModeToggle = document.getElementById('viewerModeToggle');
     if (viewerModeToggle) {
-        viewerModeToggle.style.display = canEdit ? 'block' : 'none';
+        viewerModeToggle.style.display = canEdit ? 'flex' : 'none';
     }
 
     // Hide edit controls when in viewer mode
@@ -3545,7 +3545,21 @@ function toggleBoughtItems() {
 }
 
 function toggleViewerMode() {
-    showAsViewer = document.getElementById('showAsViewerToggle').checked;
+    console.log('toggleViewerMode called');
+    const toggle = document.getElementById('showAsViewerToggle');
+    console.log('Toggle element:', toggle);
+    if (toggle) {
+        showAsViewer = toggle.checked;
+        console.log('showAsViewer set to:', showAsViewer);
+        const slider = toggle.nextElementSibling;
+        console.log('Slider element:', slider);
+        if (slider) {
+            const computedStyle = window.getComputedStyle(slider);
+            console.log('Slider background-color:', computedStyle.backgroundColor);
+            console.log('Slider display:', computedStyle.display);
+            console.log('Slider visibility:', computedStyle.visibility);
+        }
+    }
     if (currentListId) {
         loadListItems(currentListId);
     }
