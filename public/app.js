@@ -2749,7 +2749,7 @@ async function addComment(itemId) {
             text: commentText,
             authorEmail: currentUser.email,
             authorName: currentUser.displayName || currentUser.email,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            timestamp: firebase.firestore.Timestamp.now()
         };
         
         comments.push(newComment);
