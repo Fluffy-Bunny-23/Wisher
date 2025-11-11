@@ -548,6 +548,8 @@ function setupEventListeners() {
             console.error('Element not found: showAsViewerToggle');
         }
         
+
+        
         // Share buttons
         try {
             setupShareButtons();
@@ -1525,9 +1527,8 @@ function createItemCard(item, position) {
     );
     // Check if user is accessing as a viewer via share link
     const isViewerViaShare = currentListRole === 'viewer';
-    // User can add comments if they're explicitly a viewer OR accessing via viewer share link
-    // AND they're not an owner or collaborator
-    const canAddComments = currentUser && !isOwner && !isCollaborator && (isExplicitViewer || isViewerViaShare);
+    // Any authenticated user can add comments
+    const canAddComments = currentUser;
     
     // Show comments if showBoughtItems is on OR showAsViewer is on
     const shouldShowComments = showBoughtItems || showAsViewer;
@@ -3713,6 +3714,8 @@ function toggleViewerMode() {
         loadListItems(currentListId);
     }
 }
+
+
 
 function manageList() {
     showToast('List management modal would open here', 'info');
