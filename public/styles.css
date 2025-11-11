@@ -414,7 +414,7 @@ p {
   position: relative;
   width: 48px;
   height: 24px;
-  background-color: var(--divider);
+  background-color: #ccc;
   border-radius: 12px;
   transition: background-color 0.2s ease;
   cursor: pointer;

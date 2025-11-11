@@ -115,9 +115,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 
+function updateTabTitle() {
+    const hostname = window.location.hostname;
+    let prefix = '';
+    if (hostname === 'localhost') {
+        prefix = '[LH] ';
+    } else if (hostname === 'wisher-lists.web.app') {
+        prefix = '[FB] ';
+    } else if (hostname.endsWith('.app.github.dev')) {
+        prefix = '[GC] ';
+    }
+    document.title = prefix + 'Wisher - Smart Wishlist Manager';
+}
+
 function initializeApp() {
     console.log('Initializing app');
     try {
+        // Update tab title based on hostname
+        updateTabTitle();
+
         // Check for list ID in URL
         const urlParams = new URLSearchParams(window.location.search);
     const role = urlParams.get('role'); // Extract role from URL
