@@ -391,12 +391,15 @@ p {
 
 .list-controls {
   margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* Switch Toggle */
 .switch {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 12px;
 }

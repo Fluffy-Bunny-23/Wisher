@@ -4,6 +4,7 @@ let currentList = null;
 let currentListId = null;
 let currentListRole = null; // Global variable to store the role from the URL
 let showBoughtItems = false;
+let showAsViewer = false; // New global variable for viewer mode
 let geminiApiKey = localStorage.getItem('geminiApiKey') || '';
 let selectedItems = [];
 let lastSelectedItemId = null;
@@ -528,6 +529,14 @@ function setupEventListeners() {
         } else {
             console.error('Element not found: showBoughtToggle');
         }
+
+        // Show as viewer toggle
+        const showAsViewerToggle = document.getElementById('showAsViewerToggle');
+        if (showAsViewerToggle) {
+            showAsViewerToggle.addEventListener('change', toggleViewerMode);
+        } else {
+            console.error('Element not found: showAsViewerToggle');
+        }
         
         // Share buttons
         try {
@@ -959,7 +968,7 @@ function displayList(list) {
                 importListBtn.style.display = 'none';
             }
         }
-    
+
     // Set up permissions
     const isOwner = currentUser && currentUser.email === list.owner;
     const collaboratorsField = list.collaborators || [];
@@ -971,9 +980,20 @@ function displayList(list) {
                 : false
     );
     const canEdit = isOwner || isCollaborator;
-    
-    document.getElementById('addItemBtn').style.display = canEdit ? 'flex' : 'none';
-    document.getElementById('manageListBtn').style.display = isOwner ? 'flex' : 'none';
+
+    // Show/hide viewer mode toggle for owners/collaborators
+    const viewerModeToggle = document.getElementById('viewerModeToggle');
+    if (viewerModeToggle) {
+        viewerModeToggle.style.display = canEdit ? 'block' : 'none';
+    }
+
+    // Hide edit controls when in viewer mode
+    const effectiveCanEdit = canEdit && !showAsViewer;
+    document.getElementById('addItemBtn').style.display = effectiveCanEdit ? 'flex' : 'none';
+    document.getElementById('manageListBtn').style.display = (isOwner && !showAsViewer) ? 'flex' : 'none';
+    if (importListBtn) {
+        importListBtn.style.display = (isOwner && !showAsViewer) ? 'block' : 'none';
+    }
 }
 
 async function loadListItems(listId) {
@@ -1182,6 +1202,7 @@ function displayItems(items, groups = {}) {
                     : false
         );
         const canEdit = isOwner || isCollaborator;
+        const effectiveCanEdit = canEdit && !showAsViewer;
 
     // Group header
     const header = document.createElement('div');
@@ -1201,7 +1222,7 @@ function displayItems(items, groups = {}) {
                     ${groupDescription ? `<p class="group-description">${escapeHtml(groupDescription)}</p>` : ''}
                 </div>
                 <div class="group-actions">
-                    ${canEdit ? `
+                    ${effectiveCanEdit ? `
                         <button class="icon-button group-drag-handle" title="Drag to reorder">
                             <span class="material-icons">drag_indicator</span>
                         </button>
@@ -1469,12 +1490,13 @@ function createItemCard(item, position) {
                 : false
     );
     const canEdit = isOwner || isCollaborator;
-    
+    const effectiveCanEdit = canEdit && !showAsViewer;
+
     // Create checkbox for multi-select
     const checkbox = document.createElement('div');
     checkbox.className = 'item-checkbox';
     checkbox.innerHTML = `<input type="checkbox" ${selectedItems.includes(item.id) ? 'checked' : ''} />`;
-    
+
     // Add checkbox click handler with support for Ctrl and Shift selection
     const checkboxInput = checkbox.querySelector('input');
     checkboxInput.addEventListener('click', (e) => {
@@ -1506,7 +1528,7 @@ function createItemCard(item, position) {
         <div class="item-header">
             <h3 class="item-title">${escapeHtml(item.name)}</h3>
             <div class="item-actions">
-                ${canEdit ? `
+                ${effectiveCanEdit ? `
                     <button class="icon-button" onclick="editItem('${item.id}')" title="Edit">
                         <span class="material-icons">edit</span>
                     </button>
@@ -1519,18 +1541,18 @@ function createItemCard(item, position) {
                         <span class="material-icons">open_in_new</span>
                     </button>
                 ` : ''}
-                ${canEdit ? `
+                ${effectiveCanEdit ? `
                     <button class="icon-button" onclick="summarizeItem('${item.id}')" title="AI Summarize">
                         <span class="material-icons">psychology</span>
                     </button>
                 ` : ''}
-                ${!item.bought ?
+                ${!item.bought && effectiveCanEdit ?
  `
                     <button class="icon-button" onclick="markAsBought('${item.id}')" title="Mark as bought">
                         <span class="material-icons">shopping_cart</span>
                     </button>
                 ` : ''}
-                ${canEdit ? `
+                ${effectiveCanEdit ? `
                     <button class="icon-button drag-handle" title="Drag to reorder">
                         <span class="material-icons">drag_indicator</span>
                     </button>
@@ -2048,7 +2070,7 @@ async function moveGroupToPosition(groupId, rawPosition) {
 function setupDragAndDrop() {
     const container = document.getElementById('itemsContainer');
     if (container.children.length === 0) return;
-    
+
     const isOwner = currentUser && currentUser.email === currentList.owner;
     const collaboratorsField = currentList.collaborators || [];
     const isCollaborator = currentUser && (
@@ -2059,8 +2081,9 @@ function setupDragAndDrop() {
                 : false
     );
     const canEdit = isOwner || isCollaborator;
-    
-    if (!canEdit) return;
+    const effectiveCanEdit = canEdit && !showAsViewer;
+
+    if (!effectiveCanEdit) return;
     
     // Track auto-scroll state
     let autoScrollInterval = null;
@@ -3500,6 +3523,13 @@ function showToast(message, type = 'info') {
 
 function toggleBoughtItems() {
     showBoughtItems = document.getElementById('showBoughtToggle').checked;
+    if (currentListId) {
+        loadListItems(currentListId);
+    }
+}
+
+function toggleViewerMode() {
+    showAsViewer = document.getElementById('showAsViewerToggle').checked;
     if (currentListId) {
         loadListItems(currentListId);
     }
