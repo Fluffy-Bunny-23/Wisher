@@ -538,13 +538,7 @@ function setupEventListeners() {
             console.error('Element not found: addViewerBtn');
         }
         
-        // Show bought items toggle
-        const showBoughtToggle = document.getElementById('showBoughtToggle');
-        if (showBoughtToggle) {
-            showBoughtToggle.addEventListener('change', toggleBoughtItems);
-        } else {
-            console.error('Element not found: showBoughtToggle');
-        }
+        // Show bought items toggle functionality now handled by showAsViewerToggle
 
         // Show as viewer toggle
         const showAsViewerToggle = document.getElementById('showAsViewerToggle');
@@ -3695,12 +3689,7 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-function toggleBoughtItems() {
-    showBoughtItems = document.getElementById('showBoughtToggle').checked;
-    if (currentListId) {
-        loadListItems(currentListId);
-    }
-}
+
 
 function toggleViewerMode() {
     console.log('toggleViewerMode called');
@@ -3708,7 +3697,9 @@ function toggleViewerMode() {
     console.log('Toggle element:', toggle);
     if (toggle) {
         showAsViewer = toggle.checked;
+        showBoughtItems = toggle.checked;
         console.log('showAsViewer set to:', showAsViewer);
+        console.log('showBoughtItems set to:', showBoughtItems);
         const slider = toggle.nextElementSibling;
         console.log('Slider element:', slider);
         if (slider) {
@@ -4539,12 +4530,7 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-function toggleBoughtItems() {
-    showBoughtItems = document.getElementById('showBoughtToggle').checked;
-    if (currentListId) {
-        loadListItems(currentListId);
-    }
-}
+
 
 function manageList() {
     showToast('List management modal would open here', 'info');
@@ -5216,12 +5202,7 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-function toggleBoughtItems() {
-    showBoughtItems = document.getElementById('showBoughtToggle').checked;
-    if (currentListId) {
-        loadListItems(currentListId);
-    }
-}
+
 
 function manageList() {
     showToast('List management modal would open here', 'info');
