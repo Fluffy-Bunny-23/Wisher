@@ -941,6 +941,13 @@ async function loadList(listId) {
         console.log('List found, processing data');
         currentList = { id: listDoc.id, ...listDoc.data() };
         currentListId = listId;
+        
+        // Debug: Log the eventDate to see what format it's in
+        console.log('loadList: currentList.eventDate =', currentList.eventDate);
+        console.log('loadList: typeof currentList.eventDate =', typeof currentList.eventDate);
+        if (currentList.eventDate && currentList.eventDate.toDate) {
+            console.log('loadList: eventDate is a Firestore Timestamp');
+        }
 
         // Update global geminiApiKey if present in the list data
         if (currentList.geminiApiKey) {
@@ -1041,7 +1048,12 @@ async function loadListItems(listId) {
         const groups = {};
         
         itemsSnapshot.forEach(doc => {
-            items.push({ id: doc.id, ...doc.data() });
+            const itemData = doc.data();
+            // Ensure comments array exists
+            if (!itemData.comments) {
+                itemData.comments = [];
+            }
+            items.push({ id: doc.id, ...itemData });
         });
         
         groupsSnapshot.forEach(doc => {
@@ -1507,6 +1519,24 @@ function createItemCard(item, position) {
     );
     const canEdit = isOwner || isCollaborator;
     const effectiveCanEdit = canEdit && !showAsViewer;
+    
+    // Check if user is a viewer (not owner, not collaborator, but has access)
+    const viewersField = currentList.viewers || [];
+    const isExplicitViewer = currentUser && !isOwner && !isCollaborator && (
+        Array.isArray(viewersField)
+            ? viewersField.includes(currentUser.email)
+            : typeof viewersField === 'object' && viewersField !== null
+                ? Object.values(viewersField).includes(currentUser.email)
+                : false
+    );
+    // Check if user is accessing as a viewer via share link
+    const isViewerViaShare = currentListRole === 'viewer';
+    // User can add comments if they're explicitly a viewer OR accessing via viewer share link
+    // AND they're not an owner or collaborator
+    const canAddComments = currentUser && !isOwner && !isCollaborator && (isExplicitViewer || isViewerViaShare);
+    
+    // Show comments if showBoughtItems is on OR showAsViewer is on
+    const shouldShowComments = showBoughtItems || showAsViewer;
 
     // Create checkbox for multi-select
     const checkbox = document.createElement('div');
@@ -1611,10 +1641,49 @@ function createItemCard(item, position) {
                     <p><strong>Note:</strong> ${escapeHtml(item.buyerNote)}</p>
                 ` : ''}
                 <p><strong>Date:</strong> ${formatDate(item.datePurchased)}</p>
-                <button class="btn btn-secondary" onclick="markAsNotBought('${item.id}')">
-                    <span class="material-icons">remove_shopping_cart</span>
-                    Mark as Not Bought
-                </button>
+                ${effectiveCanEdit ? `
+                    <button class="btn btn-secondary" onclick="markAsNotBought('${item.id}')">
+                        <span class="material-icons">remove_shopping_cart</span>
+                        Mark as Not Bought
+                    </button>
+                ` : ''}
+            </div>
+        ` : ''}
+        ${shouldShowComments ? `
+            <div class="comments-section" id="comments-section-${item.id}">
+                <h4>Comments</h4>
+                <div id="comments-list-${item.id}" class="comments-list">
+                    ${item.comments && Array.isArray(item.comments) && item.comments.length > 0 ? 
+                        item.comments
+                            .filter(comment => comment && comment.text) // Filter out invalid comments
+                            .sort((a, b) => {
+                                // Sort by timestamp (newest first)
+                                const timeA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp).getTime()) : 0;
+                                const timeB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime()) : 0;
+                                return timeB - timeA;
+                            })
+                            .map(comment => `
+                                <div class="comment">
+                                    <div class="comment-author">${escapeHtml(comment.authorName || comment.authorEmail || 'Anonymous')}</div>
+                                    <div class="comment-text">${escapeHtml(comment.text)}</div>
+                                    ${comment.timestamp ? `
+                                        <div class="comment-date" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">
+                                            ${formatDate(comment.timestamp)}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `).join('') 
+                        : '<p style="color: var(--text-secondary); font-style: italic;">No comments yet.</p>'}
+                </div>
+                ${canAddComments ? `
+                    <div class="add-comment-form" style="margin-top: 12px;">
+                        <textarea id="comment-input-${item.id}" class="comment-input" rows="2" placeholder="Add a comment..."></textarea>
+                        <button class="btn btn-primary" onclick="addComment('${item.id}')" style="margin-top: 8px;">
+                            <span class="material-icons">comment</span>
+                            Add Comment
+                        </button>
+                    </div>
+                ` : ''}
             </div>
         ` : ''}
     `;
@@ -2626,6 +2695,95 @@ async function markAsNotBought(itemId) {
     }
 }
 
+async function addComment(itemId) {
+    if (!currentUser) {
+        showToast('Please log in to add comments', 'error');
+        return;
+    }
+    
+    if (!currentListId) {
+        showToast('No list selected', 'error');
+        return;
+    }
+    
+    if (!currentList) {
+        showToast('List data not loaded', 'error');
+        return;
+    }
+    
+    // Check if user is a viewer (not owner, not collaborator)
+    const isOwner = currentUser.email === currentList.owner;
+    const collaboratorsField = currentList.collaborators || [];
+    const isCollaborator = Array.isArray(collaboratorsField)
+        ? collaboratorsField.includes(currentUser.email)
+        : typeof collaboratorsField === 'object' && collaboratorsField !== null
+            ? Object.values(collaboratorsField).includes(currentUser.email)
+            : false;
+    
+    // Check if user is accessing as a viewer via share link
+    const isViewerViaShare = currentListRole === 'viewer';
+    
+    // Allow comments if user is not owner/collaborator OR if they're accessing as viewer via share link
+    if (isOwner || (isCollaborator && !isViewerViaShare)) {
+        showToast('Only viewers can add comments', 'error');
+        return;
+    }
+    
+    const commentInput = document.getElementById(`comment-input-${itemId}`);
+    if (!commentInput) {
+        showToast('Comment input not found', 'error');
+        return;
+    }
+    
+    const commentText = commentInput.value.trim();
+    if (!commentText) {
+        showToast('Please enter a comment', 'error');
+        commentInput.focus();
+        return;
+    }
+    
+    try {
+        // Get the current item to add the comment to its comments array
+        const itemRef = firebaseDb.collection('lists').doc(currentListId)
+            .collection('items').doc(itemId);
+        
+        const itemDoc = await itemRef.get();
+        if (!itemDoc.exists) {
+            showToast('Item not found', 'error');
+            return;
+        }
+        
+        const itemData = itemDoc.data();
+        const comments = itemData.comments || [];
+        
+        // Add the new comment
+        const newComment = {
+            text: commentText,
+            authorEmail: currentUser.email,
+            authorName: currentUser.displayName || currentUser.email,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        comments.push(newComment);
+        
+        // Update the item with the new comment
+        await itemRef.update({
+            comments: comments
+        });
+        
+        // Clear the input
+        commentInput.value = '';
+        
+        showToast('Comment added successfully!', 'success');
+        
+        // Reload the list items to show the new comment
+        loadListItems(currentListId);
+    } catch (error) {
+        console.error('Error adding comment:', error);
+        showToast('Error adding comment: ' + error.message, 'error');
+    }
+}
+
 async function parseCompositeOrAbsolutePosition(raw, itemsRef) {
     try {
         // Fetch all items ordered by position
@@ -3101,7 +3259,7 @@ function showEditModal() {
     // Populate the edit modal with list details
     document.getElementById('editListName').value = currentList.name;
     document.getElementById('editListDescription').value = currentList.description || '';
-    document.getElementById('editListEventDate').value = currentList.eventDate || '';
+    document.getElementById('editListEventDate').value = formatDateForInput(currentList.eventDate);
     document.getElementById('editListPublic').checked = currentList.isPublic || false;
 
     
@@ -3588,6 +3746,58 @@ function escapeHtml(text) {
     }
 }
 
+// Helper function to convert eventDate to YYYY-MM-DD format for date input
+function formatDateForInput(dateObj) {
+    try {
+        if (!dateObj) {
+            return '';
+        }
+        
+        let date;
+        
+        // Handle Firebase Timestamp objects
+        if (dateObj.toDate && typeof dateObj.toDate === 'function') {
+            try {
+                date = dateObj.toDate();
+            } catch (error) {
+                console.error('Error converting Firebase timestamp:', error);
+                return '';
+            }
+        } else if (dateObj instanceof Date) {
+            date = dateObj;
+        } else if (typeof dateObj === 'string') {
+            // If it's already in YYYY-MM-DD format, return as-is
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateObj)) {
+                return dateObj;
+            }
+            // Otherwise, try to parse it as a date
+            try {
+                date = new Date(dateObj);
+            } catch (error) {
+                console.error('Error parsing date string:', error);
+                return '';
+            }
+        } else {
+            return '';
+        }
+        
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+            console.warn('Invalid date object provided to formatDateForInput');
+            return '';
+        }
+        
+        // Format as YYYY-MM-DD
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    } catch (error) {
+        console.error('Error in formatDateForInput:', error);
+        return '';
+    }
+}
+
 function formatDate(dateObj) {
     try {
         if (!dateObj) {
@@ -3779,12 +3989,25 @@ function showInfoModal(item) {
 
 // Edit Modal functions
 function showEditModal() {
-    if (!currentList) return;
+    if (!currentList) {
+        console.error('showEditModal: currentList is null');
+        return;
+    }
+    
+    console.log('showEditModal: currentList.eventDate =', currentList.eventDate);
+    console.log('showEditModal: typeof currentList.eventDate =', typeof currentList.eventDate);
     
     // Populate the edit modal with list details
     document.getElementById('editListName').value = currentList.name;
     document.getElementById('editListDescription').value = currentList.description || '';
-    document.getElementById('editListEventDate').value = currentList.eventDate || '';
+    
+    // Format and set the event date
+    const formattedDate = formatDateForInput(currentList.eventDate);
+    console.log('showEditModal: formattedDate =', formattedDate);
+    const eventDateInput = document.getElementById('editListEventDate');
+    eventDateInput.value = formattedDate;
+    console.log('showEditModal: eventDateInput.value after setting =', eventDateInput.value);
+    
     document.getElementById('editListPublic').checked = currentList.isPublic || false;
     document.getElementById('editListOrdered').checked = currentList.ordered !== false;
     
@@ -4346,6 +4569,58 @@ function escapeHtml(text) {
     }
 }
 
+// Helper function to convert eventDate to YYYY-MM-DD format for date input
+function formatDateForInput(dateObj) {
+    try {
+        if (!dateObj) {
+            return '';
+        }
+        
+        let date;
+        
+        // Handle Firebase Timestamp objects
+        if (dateObj.toDate && typeof dateObj.toDate === 'function') {
+            try {
+                date = dateObj.toDate();
+            } catch (error) {
+                console.error('Error converting Firebase timestamp:', error);
+                return '';
+            }
+        } else if (dateObj instanceof Date) {
+            date = dateObj;
+        } else if (typeof dateObj === 'string') {
+            // If it's already in YYYY-MM-DD format, return as-is
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateObj)) {
+                return dateObj;
+            }
+            // Otherwise, try to parse it as a date
+            try {
+                date = new Date(dateObj);
+            } catch (error) {
+                console.error('Error parsing date string:', error);
+                return '';
+            }
+        } else {
+            return '';
+        }
+        
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+            console.warn('Invalid date object provided to formatDateForInput');
+            return '';
+        }
+        
+        // Format as YYYY-MM-DD
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    } catch (error) {
+        console.error('Error in formatDateForInput:', error);
+        return '';
+    }
+}
+
 function formatDate(dateObj) {
     try {
         if (!dateObj) {
@@ -4537,12 +4812,25 @@ function showInfoModal(item) {
 
 // Edit Modal functions
 function showEditModal() {
-    if (!currentList) return;
+    if (!currentList) {
+        console.error('showEditModal: currentList is null');
+        return;
+    }
+    
+    console.log('showEditModal: currentList.eventDate =', currentList.eventDate);
+    console.log('showEditModal: typeof currentList.eventDate =', typeof currentList.eventDate);
     
     // Populate the edit modal with list details
     document.getElementById('editListName').value = currentList.name;
     document.getElementById('editListDescription').value = currentList.description || '';
-    document.getElementById('editListEventDate').value = currentList.eventDate || '';
+    
+    // Format and set the event date
+    const formattedDate = formatDateForInput(currentList.eventDate);
+    console.log('showEditModal: formattedDate =', formattedDate);
+    const eventDateInput = document.getElementById('editListEventDate');
+    eventDateInput.value = formattedDate;
+    console.log('showEditModal: eventDateInput.value after setting =', eventDateInput.value);
+    
     document.getElementById('editListPublic').checked = currentList.isPublic || false;
     document.getElementById('editListOrdered').checked = currentList.ordered !== false;
     
@@ -4954,6 +5242,58 @@ function escapeHtml(text) {
         return div.innerHTML;
     } catch (error) {
         console.error('Error escaping HTML:', error);
+        return '';
+    }
+}
+
+// Helper function to convert eventDate to YYYY-MM-DD format for date input
+function formatDateForInput(dateObj) {
+    try {
+        if (!dateObj) {
+            return '';
+        }
+        
+        let date;
+        
+        // Handle Firebase Timestamp objects
+        if (dateObj.toDate && typeof dateObj.toDate === 'function') {
+            try {
+                date = dateObj.toDate();
+            } catch (error) {
+                console.error('Error converting Firebase timestamp:', error);
+                return '';
+            }
+        } else if (dateObj instanceof Date) {
+            date = dateObj;
+        } else if (typeof dateObj === 'string') {
+            // If it's already in YYYY-MM-DD format, return as-is
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateObj)) {
+                return dateObj;
+            }
+            // Otherwise, try to parse it as a date
+            try {
+                date = new Date(dateObj);
+            } catch (error) {
+                console.error('Error parsing date string:', error);
+                return '';
+            }
+        } else {
+            return '';
+        }
+        
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+            console.warn('Invalid date object provided to formatDateForInput');
+            return '';
+        }
+        
+        // Format as YYYY-MM-DD
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    } catch (error) {
+        console.error('Error in formatDateForInput:', error);
         return '';
     }
 }
