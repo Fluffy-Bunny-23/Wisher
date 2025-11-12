@@ -2463,10 +2463,62 @@ function showAddItemModal() {
     setupItemConditionalVisibility();
 
     const itemNameInput = document.getElementById('itemName');
+    const itemUrlInput = document.getElementById('itemURL');
+    const urlValidationMessage = document.getElementById('urlValidationMessage');
     let typingTimer;
     const doneTypingInterval = 1000; // 1 second
 
-    // Define the event handler function
+    // URL validation function
+    const validateUrlInput = () => {
+        const url = itemUrlInput.value.trim();
+        
+        if (!url) {
+            // Empty URL is valid (optional field)
+            urlValidationMessage.textContent = '';
+            urlValidationMessage.className = 'validation-message';
+            itemUrlInput.classList.remove('invalid', 'valid');
+            return;
+        }
+        
+        const validatedUrl = validateAndFormatUrl(url);
+        
+        if (validatedUrl) {
+            // Valid URL
+            const protocol = validatedUrl.split(':')[0] + ':';
+            let message = '✓ Valid URL';
+            
+            // Add protocol-specific messages
+            if (protocol === 'mailto:') {
+                message = '✓ Valid email address';
+            } else if (protocol === 'tel:') {
+                message = '✓ Valid phone number';
+            } else if (protocol === 'sms:') {
+                message = '✓ Valid SMS link';
+            } else if (['http:', 'https:'].includes(protocol)) {
+                message = '✓ Valid web URL';
+            } else {
+                message = `✓ Valid ${protocol} link`;
+            }
+            
+            urlValidationMessage.textContent = message;
+            urlValidationMessage.className = 'validation-message success';
+            itemUrlInput.classList.remove('invalid');
+            itemUrlInput.classList.add('valid');
+            
+            // Update the input with the formatted URL
+            if (validatedUrl !== url) {
+                itemUrlInput.value = validatedUrl;
+            }
+        } else {
+            // Invalid URL
+            urlValidationMessage.textContent = '✗ Please enter a valid URL, email, phone number, or supported protocol (mailto:, tel:, sms:, https:, etc.)';
+            urlValidationMessage.className = 'validation-message error';
+            itemUrlInput.classList.remove('valid');
+            itemUrlInput.classList.add('invalid');
+        }
+    };
+
+    // Define event handler function
     const handleItemNameInputEvent = () => {
         clearTimeout(typingTimer);
         typingTimer = setTimeout(async () => {
@@ -2476,7 +2528,7 @@ function showAddItemModal() {
                 const { generatedName, description, notes } = await summarizeItemName(itemName);
                 // Only update if AI returns a valid generated name
                 if (generatedName && generatedName.trim()) {
-                    document.getElementById('itemName').value = generatedName; // Update the item name input
+                    document.getElementById('itemName').value = generatedName; // Update item name input
                 }
                 document.getElementById('itemDescription').value = description;
                 document.getElementById('itemNotes').value = notes;
@@ -2488,13 +2540,18 @@ function showAddItemModal() {
     // Remove any existing listeners to prevent duplicates before adding new ones
     itemNameInput.removeEventListener('input', itemNameInput._handleItemNameInputEvent);
     itemNameInput.removeEventListener('blur', itemNameInput._handleItemNameInputEvent);
+    itemUrlInput.removeEventListener('input', itemUrlInput._handleUrlInputEvent);
+    itemUrlInput.removeEventListener('blur', itemUrlInput._handleUrlInputEvent);
 
     // Store the function reference on the element itself to allow removal later
     itemNameInput._handleItemNameInputEvent = handleItemNameInputEvent;
+    itemUrlInput._handleUrlInputEvent = validateUrlInput;
 
     // Add event listeners
     itemNameInput.addEventListener('input', itemNameInput._handleItemNameInputEvent);
     itemNameInput.addEventListener('blur', itemNameInput._handleItemNameInputEvent);
+    itemUrlInput.addEventListener('input', itemUrlInput._handleUrlInputEvent);
+    itemUrlInput.addEventListener('blur', itemUrlInput._handleUrlInputEvent);
 
     showModal('itemModal');
 }
@@ -2688,6 +2745,64 @@ function editItem(itemId) {
                 document.getElementById('itemPrice').value = item.price || '';
                 document.getElementById('itemPosition').value = item.position || '';
                 
+                // Add URL validation for edit mode
+                const itemUrlInput = document.getElementById('itemURL');
+                const urlValidationMessage = document.getElementById('urlValidationMessage');
+                
+                const validateUrlInput = () => {
+                    const url = itemUrlInput.value.trim();
+                    
+                    if (!url) {
+                        urlValidationMessage.textContent = '';
+                        urlValidationMessage.className = 'validation-message';
+                        itemUrlInput.classList.remove('invalid', 'valid');
+                        return;
+                    }
+                    
+                    const validatedUrl = validateAndFormatUrl(url);
+                    
+                    if (validatedUrl) {
+                        const protocol = validatedUrl.split(':')[0] + ':';
+                        let message = '✓ Valid URL';
+                        
+                        if (protocol === 'mailto:') {
+                            message = '✓ Valid email address';
+                        } else if (protocol === 'tel:') {
+                            message = '✓ Valid phone number';
+                        } else if (protocol === 'sms:') {
+                            message = '✓ Valid SMS link';
+                        } else if (['http:', 'https:'].includes(protocol)) {
+                            message = '✓ Valid web URL';
+                        } else {
+                            message = `✓ Valid ${protocol} link`;
+                        }
+                        
+                        urlValidationMessage.textContent = message;
+                        urlValidationMessage.className = 'validation-message success';
+                        itemUrlInput.classList.remove('invalid');
+                        itemUrlInput.classList.add('valid');
+                        
+                        if (validatedUrl !== url) {
+                            itemUrlInput.value = validatedUrl;
+                        }
+                    } else {
+                        urlValidationMessage.textContent = '✗ Please enter a valid URL, email, phone number, or supported protocol';
+                        urlValidationMessage.className = 'validation-message error';
+                        itemUrlInput.classList.remove('valid');
+                        itemUrlInput.classList.add('invalid');
+                    }
+                };
+                
+                // Remove existing listeners and add new ones
+                itemUrlInput.removeEventListener('input', itemUrlInput._handleUrlInputEvent);
+                itemUrlInput.removeEventListener('blur', itemUrlInput._handleUrlInputEvent);
+                itemUrlInput._handleUrlInputEvent = validateUrlInput;
+                itemUrlInput.addEventListener('input', itemUrlInput._handleUrlInputEvent);
+                itemUrlInput.addEventListener('blur', itemUrlInput._handleUrlInputEvent);
+                
+                // Initial validation
+                validateUrlInput();
+                
                 // Populate group selector and preselect current group
                 populateGroupSelector();
                 
@@ -2746,9 +2861,19 @@ function showItemInfo(itemId) {
 }
 
 function openItemLink(url) {
+    if (!url) return;
+    
+    // Handle different protocols appropriately
     if (url.startsWith('mailto:')) {
         window.location.href = url;
+    } else if (url.startsWith('tel:') || url.startsWith('sms:') || url.startsWith('mms:')) {
+        window.location.href = url;
+    } else if (url.startsWith('facetime:')) {
+        window.location.href = url;
+    } else if (url.startsWith('geo:') || url.startsWith('maps:')) {
+        window.location.href = url;
     } else {
+        // Web URLs and other protocols - open in new tab
         window.open(url, '_blank');
     }
 }
@@ -3348,6 +3473,130 @@ async function parseCompositeOrAbsolutePosition(raw, itemsRef) {
     }
 }
 
+function validateAndFormatUrl(url) {
+    if (!url || typeof url !== 'string') {
+        return '';
+    }
+    
+    // Trim whitespace
+    url = url.trim();
+    
+    // If URL is empty, return empty string
+    if (!url) {
+        return '';
+    }
+    
+    // Define supported protocols
+    const supportedProtocols = {
+        // Web protocols
+        'http:': true,
+        'https:': true,
+        // Communication protocols
+        'mailto:': true,
+        'tel:': true,
+        'sms:': true,
+        'mms:': true,
+        // App protocols
+        'facetime:': true,
+        'skype:': true,
+        'zoommtg:': true,
+        'teams:': true,
+        'slack:': true,
+        'discord:': true,
+        // Location protocols
+        'geo:': true,
+        'maps:': true,
+        // Media protocols
+        'spotify:': true,
+        'itunes:': true,
+        'podcast:': true,
+        // Social protocols
+        'twitter:': true,
+        'facebook:': true,
+        'instagram:': true,
+        'linkedin:': true,
+        // Other common protocols
+        'bitcoin:': true,
+        'ethereum:': true,
+        'magnet:': true
+    };
+    
+    // Check if it's already a valid URL with protocol
+    try {
+        // Try to create URL object to validate basic structure
+        const urlObj = new URL(url);
+        
+        // Check if protocol is supported
+        if (supportedProtocols[urlObj.protocol]) {
+            return url;
+        } else {
+            // Unsupported protocol or malformed like localhost:
+            // Special case: if it looks like localhost with port, handle it
+            if (/^localhost:\d+$/.test(url)) {
+                return 'https://' + url;
+            }
+            return '';
+        }
+    } catch (e) {
+        // URL constructor failed, might be missing protocol
+    }
+    
+    // Special handling for email addresses (convert to mailto:)
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(url)) {
+        return 'mailto:' + url;
+    }
+    
+    // Special handling for phone numbers (convert to tel:)
+    if (/^[\+]?[1-9][\d]{0,15}$/.test(url.replace(/[\s\-\(\)]/g, ''))) {
+        return 'tel:' + url;
+    }
+    
+    // If we get here, URL might be missing protocol
+    // First check if it looks like localhost with port or IP with port
+    if (/^localhost(:\d+)?$/.test(url) || 
+        /^127\.\d+\.\d+\.\d+(:\d+)?$/.test(url) ||
+        /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(url)) {
+        return 'https://' + url;
+    }
+    
+    // Try adding https:// first for web URLs
+    try {
+        const urlWithHttps = new URL('https://' + url);
+        
+        // Basic validation for domain
+        if (urlWithHttps.hostname && 
+            (urlWithHttps.hostname.includes('.') || 
+             urlWithHttps.hostname === 'localhost' ||
+             urlWithHttps.hostname.startsWith('localhost') ||
+             /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(urlWithHttps.hostname))) {
+            
+            return 'https://' + url;
+        }
+    } catch (e) {
+        // Still invalid
+    }
+    
+    // Try adding http:// as fallback for web URLs
+    try {
+        const urlWithHttp = new URL('http://' + url);
+        
+        // Basic validation for domain
+        if (urlWithHttp.hostname && 
+            (urlWithHttp.hostname.includes('.') || 
+             urlWithHttp.hostname === 'localhost' ||
+             urlWithHttp.hostname.startsWith('localhost') ||
+             /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(urlWithHttp.hostname))) {
+            
+            return 'http://' + url;
+        }
+    } catch (e) {
+        // Still invalid
+    }
+    
+    // If all attempts failed, return empty string
+    return '';
+}
+
 async function saveItem() {
     const form = document.getElementById('itemForm');
     const formData = new FormData(form);
@@ -3364,9 +3613,22 @@ async function saveItem() {
     // Debug logging
     console.log('Item name being saved:', itemName);
     
+    // Get and validate URL
+    const rawUrl = document.getElementById('itemURL').value.trim();
+    let validatedUrl = '';
+    
+    if (rawUrl) {
+        // Validate and format URL
+        validatedUrl = validateAndFormatUrl(rawUrl);
+        if (!validatedUrl) {
+            showToast('Please enter a valid URL', 'error');
+            return;
+        }
+    }
+    
     const itemData = {
         name: itemName,
-        url: document.getElementById('itemURL').value,
+        url: validatedUrl,
         description: document.getElementById('itemDescription').value,
         imageUrl: document.getElementById('itemImageURL').value,
         notes: document.getElementById('itemNotes').value,

@@ -1,5 +1,7 @@
 {
   "projects": {
     "default": "wisher-lists"
-  }
+  },
+  "targets": {},
+  "etags": {}
 }

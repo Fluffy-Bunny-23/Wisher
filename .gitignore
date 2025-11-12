@@ -5,3 +5,6 @@
 /.trae
 amazon_ex_*
 /.firebase
+firebase-debug.log
+firestore-debug.log
+/firestore.rules
