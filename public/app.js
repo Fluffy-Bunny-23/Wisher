@@ -2495,9 +2495,9 @@ function showAddItemModal() {
             } else if (protocol === 'sms:') {
                 message = '✓ Valid SMS link';
             } else if (['http:', 'https:'].includes(protocol)) {
-                message = '✓ Valid web URL';
+                message = '✓ Valid web URI';
             } else {
-                message = `✓ Valid ${protocol} link`;
+                message = `✓ Valid ${protocol} URI`;
             }
             
             urlValidationMessage.textContent = message;
@@ -2510,8 +2510,8 @@ function showAddItemModal() {
                 itemUrlInput.value = validatedUrl;
             }
         } else {
-            // Invalid URL
-            urlValidationMessage.textContent = '✗ Please enter a valid URL, email, phone number, or supported protocol (mailto:, tel:, sms:, https:, etc.)';
+            // Invalid URI
+            urlValidationMessage.textContent = '✗ Please enter a valid URI, email, phone number, or supported protocol';
             urlValidationMessage.className = 'validation-message error';
             itemUrlInput.classList.remove('valid');
             itemUrlInput.classList.add('invalid');
@@ -2554,6 +2554,8 @@ function showAddItemModal() {
     itemUrlInput.addEventListener('blur', itemUrlInput._handleUrlInputEvent);
 
     showModal('itemModal');
+    
+
 }
 
 // Conditional visibility functions for items
@@ -2763,7 +2765,7 @@ function editItem(itemId) {
                     
                     if (validatedUrl) {
                         const protocol = validatedUrl.split(':')[0] + ':';
-                        let message = '✓ Valid URL';
+                        let message = '✓ Valid URI';
                         
                         if (protocol === 'mailto:') {
                             message = '✓ Valid email address';
@@ -2772,9 +2774,9 @@ function editItem(itemId) {
                         } else if (protocol === 'sms:') {
                             message = '✓ Valid SMS link';
                         } else if (['http:', 'https:'].includes(protocol)) {
-                            message = '✓ Valid web URL';
+                            message = '✓ Valid web URI';
                         } else {
-                            message = `✓ Valid ${protocol} link`;
+                            message = `✓ Valid ${protocol} URI`;
                         }
                         
                         urlValidationMessage.textContent = message;
@@ -2786,7 +2788,7 @@ function editItem(itemId) {
                             itemUrlInput.value = validatedUrl;
                         }
                     } else {
-                        urlValidationMessage.textContent = '✗ Please enter a valid URL, email, phone number, or supported protocol';
+                        urlValidationMessage.textContent = '✗ Please enter a valid URI, email, phone number, or supported protocol';
                         urlValidationMessage.className = 'validation-message error';
                         itemUrlInput.classList.remove('valid');
                         itemUrlInput.classList.add('invalid');
@@ -2803,35 +2805,10 @@ function editItem(itemId) {
                 // Initial validation
                 validateUrlInput();
                 
-                // Populate group selector and preselect current group
-                populateGroupSelector();
-                
-                // Setup conditional visibility options
-                setupItemConditionalVisibility();
-                
-                // Set group selection after async population
-                setTimeout(() => {
-                    const groupSelect = document.getElementById('itemGroup');
-                    if (groupSelect && item.groupId) {
-                        groupSelect.value = item.groupId;
-                    }
-                    
-                    // Populate conditional visibility fields
-                    document.getElementById('itemConditionalVisibility').checked = item.conditionalVisibility || false;
-                    
-                    // Trigger change event to show/hide options
-                    const conditionalCheckbox = document.getElementById('itemConditionalVisibility');
-                    conditionalCheckbox.dispatchEvent(new Event('change'));
-                    
-                    if (item.conditionalVisibility && item.triggerItemId) {
-                        setTimeout(() => {
-                            document.getElementById('itemTriggerItem').value = item.triggerItemId;
-                        }, 150);
-                    }
-                }, 100);
-                
-                // Show the modal
+                // Show the modal first
                 showModal('itemModal');
+                
+
             } else {
                 showToast('Item not found', 'error');
             }
@@ -3473,6 +3450,8 @@ async function parseCompositeOrAbsolutePosition(raw, itemsRef) {
     }
 }
 
+
+
 function validateAndFormatUrl(url) {
     if (!url || typeof url !== 'string') {
         return '';
@@ -3621,7 +3600,7 @@ async function saveItem() {
         // Validate and format URL
         validatedUrl = validateAndFormatUrl(rawUrl);
         if (!validatedUrl) {
-            showToast('Please enter a valid URL', 'error');
+            showToast('Please enter a valid URI', 'error');
             return;
         }
     }
