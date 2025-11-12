@@ -119,7 +119,11 @@ def main():
 
     # Print initial header
     for line in HEADER_LINES:
-        print(line)
+        try:
+            print(line)
+        except UnicodeEncodeError:
+            # Fallback for systems that don't support Unicode
+            print(line.encode('ascii', 'ignore').decode('ascii'))
     print("\n" + "-"*50 + "\n") # Add a separator
     
     # Create server

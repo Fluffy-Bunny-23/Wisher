@@ -1207,6 +1207,18 @@ function displayItems(items, groups = {}) {
 
     items.forEach(item => {
         if (!showBoughtItems && item.bought) return; // respect bought toggle
+        
+        // Check if item should be visible based on conditional visibility
+        if (item.conditionalVisibility && item.triggerItemId) {
+            const triggerItem = items.find(it => it.id === item.triggerItemId);
+            const shouldShow = !!(triggerItem && triggerItem.bought);
+            
+            if (!shouldShow) {
+                // Hide reliant item if trigger not bought
+                return;
+            }
+        }
+        
         const gid = item.groupId || '';
         if (!gid) {
             ungroupedItems.push(item);
@@ -1368,6 +1380,12 @@ function displayItems(items, groups = {}) {
         ungroupedItems.forEach((item) => {
             const label = String(displayCounter++);
             const itemCard = createItemCard(item, label);
+            
+            // Add indentation class for reliant items
+            if (item.conditionalVisibility && item.triggerItemId) {
+                itemCard.classList.add('reliant-item');
+            }
+            
             container.appendChild(itemCard);
 
             const groupsTriggered = triggerToGroups[item.id] || [];
@@ -2374,6 +2392,9 @@ function showAddItemModal() {
     // Populate group selector
     populateGroupSelector();
 
+    // Setup conditional visibility options
+    setupItemConditionalVisibility();
+
     const itemNameInput = document.getElementById('itemName');
     let typingTimer;
     const doneTypingInterval = 1000; // 1 second
@@ -2406,6 +2427,44 @@ function showAddItemModal() {
     itemNameInput.addEventListener('blur', itemNameInput._handleItemNameInputEvent);
 
     showModal('itemModal');
+}
+
+// Conditional visibility functions for items
+function setupItemConditionalVisibility() {
+    const conditionalCheckbox = document.getElementById('itemConditionalVisibility');
+    const reliantOptions = document.getElementById('reliantOptions');
+
+    // Populate item selector for reliant option
+    populateItemSelectorForConditional();
+
+    // Handle conditional visibility checkbox change
+    conditionalCheckbox.addEventListener('change', function() {
+        reliantOptions.style.display = this.checked ? 'block' : 'none';
+    });
+}
+
+function populateItemSelectorForConditional() {
+    const reliantSelector = document.getElementById('itemTriggerItem');
+    
+    if (!reliantSelector || !currentListId) return;
+    
+    // Clear existing options
+    reliantSelector.innerHTML = '<option value="">Select an item...</option>';
+    
+    // Fetch items from Firestore
+    firebaseDb.collection('lists').doc(currentListId).collection('items')
+        .orderBy('position')
+        .get()
+        .then(snapshot => {
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = data.name || 'Untitled';
+                reliantSelector.appendChild(option);
+            });
+        })
+        .catch(err => console.error('Error populating item selector:', err));
 }
 
 // Group management functions
@@ -2562,11 +2621,27 @@ function editItem(itemId) {
                 // Populate group selector and preselect current group
                 populateGroupSelector();
                 
+                // Setup conditional visibility options
+                setupItemConditionalVisibility();
+                
                 // Set group selection after async population
                 setTimeout(() => {
                     const groupSelect = document.getElementById('itemGroup');
                     if (groupSelect && item.groupId) {
                         groupSelect.value = item.groupId;
+                    }
+                    
+                    // Populate conditional visibility fields
+                    document.getElementById('itemConditionalVisibility').checked = item.conditionalVisibility || false;
+                    
+                    // Trigger change event to show/hide options
+                    const conditionalCheckbox = document.getElementById('itemConditionalVisibility');
+                    conditionalCheckbox.dispatchEvent(new Event('change'));
+                    
+                    if (item.conditionalVisibility && item.triggerItemId) {
+                        setTimeout(() => {
+                            document.getElementById('itemTriggerItem').value = item.triggerItemId;
+                        }, 150);
                     }
                 }, 100);
                 
@@ -3191,6 +3266,8 @@ async function saveItem() {
     const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
     const desiredPosition = await parseCompositeOrAbsolutePosition(rawPos, itemsRef);
     
+    const conditionalVisibility = document.getElementById('itemConditionalVisibility').checked;
+    
     const itemData = {
         name: document.getElementById('itemName').value,
         url: document.getElementById('itemURL').value,
@@ -3201,6 +3278,8 @@ async function saveItem() {
         position: desiredPosition,
         bought: false,
         groupId: document.getElementById('itemGroup').value || null,
+        conditionalVisibility: conditionalVisibility || false,
+        triggerItemId: conditionalVisibility ? document.getElementById('itemTriggerItem').value : null,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };

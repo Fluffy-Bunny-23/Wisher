@@ -194,6 +194,22 @@
                             <option value="">No Group</option>
                         </select>
                     </div>
+
+                    <!-- Conditional Visibility Options -->
+                    <div class="input-group">
+                        <label class="checkbox-group">
+                            <input type="checkbox" id="itemConditionalVisibility">
+                            <span class="checkmark"></span>
+                            Reliant - only show when another item is bought
+                        </label>
+                    </div>
+
+                    <div id="reliantOptions" class="input-group conditional-options" style="display: none;">
+                        <label for="itemTriggerItem">Show when this item is bought:</label>
+                        <select id="itemTriggerItem">
+                            <option value="">Select an item...</option>
+                        </select>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
