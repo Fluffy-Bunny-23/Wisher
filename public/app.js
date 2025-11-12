@@ -1204,6 +1204,7 @@ function displayItems(items, groups = {}) {
     const groupsMap = groups || {};
     const itemsByGroup = {};
     const ungroupedItems = [];
+    const reliantItems = {}; // triggerItemId -> [reliant items]
 
     items.forEach(item => {
         if (!showBoughtItems && item.bought) return; // respect bought toggle
@@ -1211,12 +1212,34 @@ function displayItems(items, groups = {}) {
         // Check if item should be visible based on conditional visibility
         if (item.conditionalVisibility && item.triggerItemId) {
             const triggerItem = items.find(it => it.id === item.triggerItemId);
-            const shouldShow = !!(triggerItem && triggerItem.bought);
+            const isTriggerBought = !!(triggerItem && triggerItem.bought);
             
-            if (!shouldShow) {
-                // Hide reliant item if trigger not bought
+            // Check if user is owner or collaborator
+            const isOwner = currentUser && currentUser.email === currentList.owner;
+            const collaboratorsField = currentList.collaborators || [];
+            const isCollaborator = currentUser && (
+                Array.isArray(collaboratorsField)
+                    ? collaboratorsField.includes(currentUser.email)
+                    : typeof collaboratorsField === 'object' && collaboratorsField !== null
+                        ? Object.values(collaboratorsField).includes(currentUser.email)
+                        : false
+            );
+            const canEdit = isOwner || isCollaborator;
+            
+            // For viewers: hide until trigger is bought
+            if (!canEdit && !isTriggerBought) {
                 return;
             }
+            
+            // Store trigger status for styling
+            item._triggerBought = isTriggerBought;
+            
+            // Add to reliant items mapping instead of ungroupedItems
+            if (!reliantItems[item.triggerItemId]) {
+                reliantItems[item.triggerItemId] = [];
+            }
+            reliantItems[item.triggerItemId].push(item);
+            return; // Don't add to ungroupedItems
         }
         
         const gid = item.groupId || '';
@@ -1375,18 +1398,29 @@ function displayItems(items, groups = {}) {
         renderedGroups.add(groupId);
     }
 
-    // Render ungrouped items first; attach any groups triggered by each item directly after
+    // Render ungrouped items first; attach any reliant items and groups triggered by each item directly after
     if (ungroupedItems.length > 0) {
         ungroupedItems.forEach((item) => {
             const label = String(displayCounter++);
             const itemCard = createItemCard(item, label);
-            
-            // Add indentation class for reliant items
-            if (item.conditionalVisibility && item.triggerItemId) {
-                itemCard.classList.add('reliant-item');
-            }
-            
             container.appendChild(itemCard);
+
+            // Render reliant items that depend on this item
+            const itemReliants = reliantItems[item.id] || [];
+            itemReliants.forEach(reliantItem => {
+                const reliantLabel = String(displayCounter++);
+                const reliantCard = createItemCard(reliantItem, reliantLabel);
+                
+                // Add indentation and styling for reliant items
+                reliantCard.classList.add('reliant-item');
+                if (reliantItem._triggerBought) {
+                    reliantCard.classList.add('reliant-trigger-bought');
+                } else {
+                    reliantCard.classList.add('reliant-trigger-pending');
+                }
+                
+                container.appendChild(reliantCard);
+            });
 
             const groupsTriggered = triggerToGroups[item.id] || [];
             groupsTriggered.forEach(gid => {
@@ -2407,7 +2441,10 @@ function showAddItemModal() {
             if (itemName) {
                 showLoading();
                 const { generatedName, description, notes } = await summarizeItemName(itemName);
-                document.getElementById('itemName').value = generatedName; // Update the item name input
+                // Only update if AI returns a valid generated name
+                if (generatedName && generatedName.trim()) {
+                    document.getElementById('itemName').value = generatedName; // Update the item name input
+                }
                 document.getElementById('itemDescription').value = description;
                 document.getElementById('itemNotes').value = notes;
                 hideLoading();
@@ -3267,9 +3304,13 @@ async function saveItem() {
     const desiredPosition = await parseCompositeOrAbsolutePosition(rawPos, itemsRef);
     
     const conditionalVisibility = document.getElementById('itemConditionalVisibility').checked;
+    const itemName = document.getElementById('itemName').value;
+    
+    // Debug logging
+    console.log('Item name being saved:', itemName);
     
     const itemData = {
-        name: document.getElementById('itemName').value,
+        name: itemName,
         url: document.getElementById('itemURL').value,
         description: document.getElementById('itemDescription').value,
         imageUrl: document.getElementById('itemImageURL').value,

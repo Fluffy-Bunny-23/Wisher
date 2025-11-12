@@ -511,12 +511,19 @@ input:checked + .slider:before {
 .item-card.reliant-item {
   margin-left: 40px;
   border-left: 3px solid var(--primary-color);
+}
+
+.item-card.reliant-item.reliant-trigger-pending {
+  background-color: #E3F2FD; /* Light blue background */
+  opacity: 0.8;
+}
+
+.item-card.reliant-item.reliant-trigger-bought {
   background-color: var(--primary-light);
   opacity: 0.9;
 }
 
 .item-card.reliant-item:hover {
-  background-color: var(--primary-light);
   box-shadow: var(--shadow-2);
 }
 
