@@ -1227,12 +1227,13 @@ function displayItems(items, groups = {}) {
     const reliantItems = {}; // triggerItemId -> [reliant items]
 
     items.forEach(item => {
-        if (!showBoughtItems && item.bought) return; // respect bought toggle
-        
-        // Check if item should be visible based on conditional visibility
+        // Check if item should be visible based on conditional visibility first
         if (item.conditionalVisibility && item.triggerItemId) {
             const triggerItem = items.find(it => it.id === item.triggerItemId);
             const isTriggerBought = !!(triggerItem && triggerItem.bought);
+            
+            // Debug logging
+            console.log('Processing reliant item:', item.name, 'trigger:', triggerItem?.name, 'trigger bought:', isTriggerBought);
             
             // Check if user is owner or collaborator
             const isOwner = currentUser && currentUser.email === currentList.owner;
@@ -1246,10 +1247,15 @@ function displayItems(items, groups = {}) {
             );
             const canEdit = isOwner || isCollaborator;
             
+            console.log('User permissions - canEdit:', canEdit, 'currentUser:', currentUser?.email);
+            
             // For viewers: hide until trigger is bought
             if (!canEdit && !isTriggerBought) {
+                console.log('Hiding reliant item for viewer - trigger not bought');
                 return;
             }
+            
+            console.log('Showing reliant item');
             
             // Store trigger status for styling
             item._triggerBought = isTriggerBought;
@@ -1261,6 +1267,9 @@ function displayItems(items, groups = {}) {
             reliantItems[item.triggerItemId].push(item);
             return; // Don't add to ungroupedItems
         }
+        
+        // Apply bought toggle filter only to non-reliant items
+        if (!showBoughtItems && item.bought) return; // respect bought toggle
         
         const gid = item.groupId || '';
         if (!gid) {
@@ -1717,6 +1726,11 @@ function createItemCard(item, position) {
                 ${!item.bought ? `
                     <button class="icon-button" onclick="markAsBought('${item.id}')" title="Mark as bought">
                         <span class="material-icons">shopping_cart</span>
+                    </button>
+                ` : ''}
+                ${item.bought && currentUser && item.buyerEmail === currentUser.email ? `
+                    <button class="icon-button" onclick="unmarkAsBought('${item.id}')" title="Unmark as bought (erase purchase data)">
+                        <span class="material-icons">restore</span>
                     </button>
                 ` : ''}
                 ${effectiveCanEdit ? `
@@ -2896,6 +2910,28 @@ async function markAsNotBought(itemId) {
         loadListItems(currentListId);
     } catch (error) {
         showToast('Error marking item as not bought: ' + error.message, 'error');
+    }
+}
+
+async function unmarkAsBought(itemId) {
+    if (!confirm('Are you sure you want to unmark this item as bought? This will erase all purchase data and cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        await firebaseDb.collection('lists').doc(currentListId)
+            .collection('items').doc(itemId).update({
+                bought: false,
+                buyerName: firebase.firestore.FieldValue.delete(),
+                buyerEmail: firebase.firestore.FieldValue.delete(),
+                buyerNote: firebase.firestore.FieldValue.delete(),
+                datePurchased: firebase.firestore.FieldValue.delete()
+            });
+        
+        showToast('Item unmarked as bought - purchase data erased!', 'success');
+        loadListItems(currentListId);
+    } catch (error) {
+        showToast('Error unmarking item: ' + error.message, 'error');
     }
 }
 
