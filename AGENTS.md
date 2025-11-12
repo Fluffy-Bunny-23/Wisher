@@ -44,12 +44,11 @@
 
 - Use Firestore for data persistence
 - Firebase Auth for authentication (Google OAuth, email/password)
-- Security rules for data protection
 - No API keys in frontend code (except optional Gemini key)
 
 ### General Conventions
 
 - File naming: kebab-case for assets, camelCase for JS
-- Comments only for complex business logic
+- Comments only for complex logic
 - localStorage for client-side preferences
 - Material Design UI components throughout
