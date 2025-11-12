@@ -35,6 +35,49 @@ function hideSyncIndicator() {
     if (el) el.classList.add('hidden');
 }
 
+function showUserStatus() {
+    if (!currentUser || !currentList) {
+        console.log('User status: No user or list loaded');
+        return;
+    }
+
+    // Determine user role
+    let userRole = 'viewer';
+    let roleColor = '#FF9800'; // Orange for viewer
+    
+    if (currentUser.email === currentList.owner) {
+        userRole = 'owner';
+        roleColor = '#4CAF50'; // Green for owner
+    } else {
+        const collaboratorsField = currentList.collaborators || [];
+        const isCollaborator = Array.isArray(collaboratorsField)
+            ? collaboratorsField.includes(currentUser.email)
+            : typeof collaboratorsField === 'object' && collaboratorsField !== null
+                ? Object.values(collaboratorsField).includes(currentUser.email)
+                : false;
+        
+        if (isCollaborator) {
+            userRole = 'collaborator';
+            roleColor = '#2196F3'; // Blue for collaborator
+        }
+    }
+
+    // Create styled console message
+    const style = [
+        'background: ' + roleColor,
+        'color: white',
+        'padding: 8px 12px',
+        'border-radius: 4px',
+        'font-weight: bold',
+        'font-size: 14px',
+        'display: inline-block',
+        'margin: 4px 0'
+    ].join(';');
+
+    console.log('%c User Status: ' + userRole.toUpperCase() + ' ', style);
+    console.log('%c List: ' + currentList.name + ' | User: ' + currentUser.email, 'color: #666; font-style: italic;');
+}
+
 function showUndoToast(message, undoCallback) {
     // Create a toast with an Undo button
     const toast = document.createElement('div');
@@ -963,6 +1006,9 @@ async function loadList(listId) {
         await loadListItems(listId);
         showScreen('wishlistScreen');
         
+        // Show user status in console
+        showUserStatus();
+        
         clearTimeout(safetyTimeout);
         hideLoading();
         console.log('List loaded successfully');
@@ -1532,6 +1578,10 @@ function createItemCard(item, position) {
     
     // Show comments if showBoughtItems is on OR showAsViewer is on
     const shouldShowComments = showBoughtItems || showAsViewer;
+    
+    // Show gray line only if there are actual comments to display
+    const hasComments = item.comments && Array.isArray(item.comments) && item.comments.length > 0;
+    const shouldShowGrayLine = shouldShowComments && hasComments;
 
     // Create checkbox for multi-select
     const checkbox = document.createElement('div');
@@ -1650,7 +1700,7 @@ function createItemCard(item, position) {
             </div>
         ` : ''}
         ${shouldShowComments ? `
-            <div class="comments-section" id="comments-section-${item.id}">
+            <div class="comments-section ${hasComments ? '' : 'no-comments'}" id="comments-section-${item.id}" style="${hasComments ? '' : 'border-top: none;'}">
                 ${item.comments && Array.isArray(item.comments) && item.comments.length > 0 ? `
                     <h4>Comments</h4>
                     <div id="comments-list-${item.id}" class="comments-list">
@@ -1662,9 +1712,32 @@ function createItemCard(item, position) {
                                 const timeB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime()) : 0;
                                 return timeB - timeA;
                             })
-                            .map(comment => `
-                                <div class="comment">
-                                    <div class="comment-author">${escapeHtml(comment.authorName || comment.authorEmail || 'Anonymous')}</div>
+                            .map((comment, index) => {
+                                const isOwnComment = currentUser && comment.authorEmail === currentUser.email;
+                                const commentId = comment.id || `comment-${index}`;
+                                return `
+                                <div class="comment" data-comment-id="${commentId}" data-comment-index="${index}" data-author-email="${comment.authorEmail || ''}">
+                                    <div class="comment-header">
+                                        <div class="comment-author">
+                                            ${escapeHtml(comment.authorName || 'Anonymous')}
+                                            ${comment.authorName && comment.authorEmail && comment.authorName !== comment.authorEmail ? 
+                                                `<span style="font-size: 0.875rem; color: var(--text-secondary); margin-left: 4px;">(${escapeHtml(comment.authorEmail)})</span>` : 
+                                                comment.authorEmail ? 
+                                                    `<span style="font-size: 0.875rem; color: var(--text-secondary); margin-left: 4px;">(${escapeHtml(comment.authorEmail)})</span>` : 
+                                                    ''
+                                            }
+                                        </div>
+                                        ${isOwnComment ? `
+                                            <div class="comment-actions">
+                                                <button class="icon-button comment-edit-btn" onclick="editComment('${item.id}', '${commentId}', ${index})" title="Edit comment">
+                                                    <span class="material-icons">edit</span>
+                                                </button>
+                                                <button class="icon-button comment-delete-btn" onclick="deleteComment('${item.id}', '${commentId}', ${index})" title="Delete comment">
+                                                    <span class="material-icons">delete</span>
+                                                </button>
+                                            </div>
+                                        ` : ''}
+                                    </div>
                                     <div class="comment-text">${escapeHtml(comment.text)}</div>
                                     ${comment.timestamp ? `
                                         <div class="comment-date" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">
@@ -1672,7 +1745,7 @@ function createItemCard(item, position) {
                                         </div>
                                     ` : ''}
                                 </div>
-                            `).join('')}
+                            `}).join('')}
                     </div>
                 ` : ''}
                 ${canAddComments ? `
@@ -2751,6 +2824,7 @@ async function addComment(itemId) {
         
         // Add the new comment
         const newComment = {
+            id: `comment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             text: commentText,
             authorEmail: currentUser.email,
             authorName: currentUser.displayName || currentUser.email,
@@ -2779,9 +2853,187 @@ async function addComment(itemId) {
 
 function toggleCommentForm(itemId) {
     const formElement = document.getElementById(`add-comment-form-${itemId}`);
-    if (formElement) {
+    const commentsSection = document.getElementById(`comments-section-${itemId}`);
+    if (formElement && commentsSection) {
         const currentDisplay = formElement.style.display;
-        formElement.style.display = currentDisplay === 'none' ? 'block' : 'none';
+        const isShowing = currentDisplay === 'none';
+        formElement.style.display = isShowing ? 'block' : 'none';
+        
+        // Show/hide gray line based on whether form is showing or there are comments
+        const hasComments = commentsSection.querySelector('.comments-list') && 
+                          commentsSection.querySelector('.comments-list').children.length > 0;
+        commentsSection.style.borderTop = (isShowing || hasComments) ? '1px solid var(--divider)' : 'none';
+    }
+}
+
+async function editComment(itemId, commentId, commentIndex) {
+    if (!currentUser) {
+        showToast('Please log in to edit comments', 'error');
+        return;
+    }
+    
+    try {
+        // Get the current item and comment
+        const itemRef = firebaseDb.collection('lists').doc(currentListId).collection('items').doc(itemId);
+        const itemDoc = await itemRef.get();
+        
+        if (!itemDoc.exists) {
+            showToast('Item not found', 'error');
+            return;
+        }
+        
+        const itemData = itemDoc.data();
+        const comments = itemData.comments || [];
+        const comment = comments[commentIndex];
+        
+        if (!comment) {
+            showToast('Comment not found', 'error');
+            return;
+        }
+        
+        // Check if user owns this comment
+        if (comment.authorEmail !== currentUser.email) {
+            showToast('You can only edit your own comments', 'error');
+            return;
+        }
+        
+        // Find the comment element in DOM
+        const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`);
+        if (!commentElement) {
+            showToast('Comment element not found', 'error');
+            return;
+        }
+        
+        const textElement = commentElement.querySelector('.comment-text');
+        const originalText = comment.text;
+        
+        // Replace text with textarea
+        const textarea = document.createElement('textarea');
+        textarea.className = 'comment-input';
+        textarea.value = originalText;
+        textarea.rows = 3;
+        textarea.style.marginBottom = '8px';
+        
+        // Create action buttons
+        const actionsDiv = document.createElement('div');
+        actionsDiv.style.display = 'flex';
+        actionsDiv.style.gap = '8px';
+        actionsDiv.style.marginTop = '8px';
+        
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'btn btn-primary';
+        saveBtn.innerHTML = '<span class="material-icons" style="font-size: 16px; margin-right: 4px;">save</span>Save';
+        saveBtn.onclick = async () => {
+            const newText = textarea.value.trim();
+            if (!newText) {
+                showToast('Comment cannot be empty', 'error');
+                return;
+            }
+            
+            if (newText === originalText) {
+                cancelEdit();
+                return;
+            }
+            
+            try {
+                // Update comment in array
+                comments[commentIndex] = {
+                    ...comment,
+                    text: newText,
+                    editedAt: firebase.firestore.Timestamp.now()
+                };
+                
+                // Update in Firestore
+                await itemRef.update({ comments: comments });
+                showToast('Comment updated successfully!', 'success');
+                
+                // Reload items to show updated comment
+                await loadListItems(currentListId);
+            } catch (error) {
+                console.error('Error updating comment:', error);
+                showToast('Error updating comment: ' + error.message, 'error');
+            }
+        };
+        
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn btn-secondary';
+        cancelBtn.innerHTML = '<span class="material-icons" style="font-size: 16px; margin-right: 4px;">cancel</span>Cancel';
+        cancelBtn.onclick = cancelEdit;
+        
+        function cancelEdit() {
+            // Restore original text
+            textElement.style.display = 'block';
+            textarea.remove();
+            actionsDiv.remove();
+        }
+        
+        // Replace text with editing interface
+        textElement.style.display = 'none';
+        textElement.parentNode.insertBefore(textarea, textElement);
+        textElement.parentNode.insertBefore(actionsDiv, textElement.nextSibling);
+        actionsDiv.appendChild(saveBtn);
+        actionsDiv.appendChild(cancelBtn);
+        
+        // Focus textarea
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        
+    } catch (error) {
+        console.error('Error editing comment:', error);
+        showToast('Error editing comment: ' + error.message, 'error');
+    }
+}
+
+async function deleteComment(itemId, commentId, commentIndex) {
+    if (!currentUser) {
+        showToast('Please log in to delete comments', 'error');
+        return;
+    }
+    
+    try {
+        // Get current item and comment
+        const itemRef = firebaseDb.collection('lists').doc(currentListId).collection('items').doc(itemId);
+        const itemDoc = await itemRef.get();
+        
+        if (!itemDoc.exists) {
+            showToast('Item not found', 'error');
+            return;
+        }
+        
+        const itemData = itemDoc.data();
+        const comments = itemData.comments || [];
+        const comment = comments[commentIndex];
+        
+        if (!comment) {
+            showToast('Comment not found', 'error');
+            return;
+        }
+        
+        // Check if user owns this comment
+        if (comment.authorEmail !== currentUser.email) {
+            showToast('You can only delete your own comments', 'error');
+            return;
+        }
+        
+        // Confirm deletion
+        const confirmMessage = `Are you sure you want to delete this comment?\n\n"${comment.text.substring(0, 100)}${comment.text.length > 100 ? '...' : ''}"`;
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+        
+        // Remove comment from array
+        comments.splice(commentIndex, 1);
+        
+        // Update in Firestore
+        await itemRef.update({ comments: comments });
+        showToast('Comment deleted successfully!', 'success');
+        
+        // Reload items to reflect changes
+        await loadListItems(currentListId);
+        
+    } catch (error) {
+        console.error('Error deleting comment:', error);
+        showToast('Error deleting comment: ' + error.message, 'error');
     }
 }
 
