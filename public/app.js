@@ -1574,6 +1574,11 @@ function createItemCard(item, position) {
                         <span class="material-icons">edit</span>
                     </button>
                 ` : ''}
+                ${shouldShowComments && canAddComments ? `
+                    <button class="icon-button" onclick="toggleCommentForm('${item.id}')" title="Add Comment">
+                        <span class="material-icons">comment</span>
+                    </button>
+                ` : ''}
                 <button class="icon-button" onclick="showItemInfo('${item.id}')" title="Info">
                     <span class="material-icons">info</span>
                 </button>
@@ -1646,10 +1651,10 @@ function createItemCard(item, position) {
         ` : ''}
         ${shouldShowComments ? `
             <div class="comments-section" id="comments-section-${item.id}">
-                <h4>Comments</h4>
-                <div id="comments-list-${item.id}" class="comments-list">
-                    ${item.comments && Array.isArray(item.comments) && item.comments.length > 0 ? 
-                        item.comments
+                ${item.comments && Array.isArray(item.comments) && item.comments.length > 0 ? `
+                    <h4>Comments</h4>
+                    <div id="comments-list-${item.id}" class="comments-list">
+                        ${item.comments
                             .filter(comment => comment && comment.text) // Filter out invalid comments
                             .sort((a, b) => {
                                 // Sort by timestamp (newest first)
@@ -1667,11 +1672,11 @@ function createItemCard(item, position) {
                                         </div>
                                     ` : ''}
                                 </div>
-                            `).join('') 
-                        : '<p style="color: var(--text-secondary); font-style: italic;">No comments yet.</p>'}
-                </div>
+                            `).join('')}
+                    </div>
+                ` : ''}
                 ${canAddComments ? `
-                    <div class="add-comment-form" style="margin-top: 12px;">
+                    <div class="add-comment-form" id="add-comment-form-${item.id}" style="margin-top: 12px; display: none;">
                         <textarea id="comment-input-${item.id}" class="comment-input" rows="2" placeholder="Add a comment..."></textarea>
                         <button class="btn btn-primary" onclick="addComment('${item.id}')" style="margin-top: 8px;">
                             <span class="material-icons">comment</span>
@@ -2769,6 +2774,14 @@ async function addComment(itemId) {
     } catch (error) {
         console.error('Error adding comment:', error);
         showToast('Error adding comment: ' + error.message, 'error');
+    }
+}
+
+function toggleCommentForm(itemId) {
+    const formElement = document.getElementById(`add-comment-form-${itemId}`);
+    if (formElement) {
+        const currentDisplay = formElement.style.display;
+        formElement.style.display = currentDisplay === 'none' ? 'block' : 'none';
     }
 }
 
