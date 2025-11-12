@@ -1142,6 +1142,26 @@ function displayItems(items, groups = {}) {
                 : false
     );
     const canEdit = isOwner || isCollaborator;
+    
+    // Auto-set viewer mode for actual viewers and hide toggle
+    const viewerModeToggle = document.getElementById('viewerModeToggle');
+    const showAsViewerToggle = document.getElementById('showAsViewerToggle');
+    const viewerModeContainer = viewerModeToggle ? viewerModeToggle.parentElement : null;
+    
+    if (!canEdit && currentUser) {
+        // This is a viewer - auto-enable viewer mode and hide toggle
+        showAsViewer = true;
+        showBoughtItems = true;
+        if (showAsViewerToggle) {
+            showAsViewerToggle.checked = true;
+        }
+        if (viewerModeContainer) {
+            viewerModeContainer.style.display = 'none';
+        }
+    } else if (canEdit && viewerModeContainer) {
+        // This is owner/collaborator - show the toggle
+        viewerModeContainer.style.display = 'flex';
+    }
 
     // Create selection action bar
     const selectionActionBar = document.createElement('div');
@@ -1694,8 +1714,7 @@ function createItemCard(item, position) {
                         <span class="material-icons">psychology</span>
                     </button>
                 ` : ''}
-                ${!item.bought && effectiveCanEdit ?
- `
+                ${!item.bought ? `
                     <button class="icon-button" onclick="markAsBought('${item.id}')" title="Mark as bought">
                         <span class="material-icons">shopping_cart</span>
                     </button>
@@ -4071,22 +4090,10 @@ function showToast(message, type = 'info') {
 
 
 function toggleViewerMode() {
-    console.log('toggleViewerMode called');
     const toggle = document.getElementById('showAsViewerToggle');
-    console.log('Toggle element:', toggle);
     if (toggle) {
         showAsViewer = toggle.checked;
         showBoughtItems = toggle.checked;
-        console.log('showAsViewer set to:', showAsViewer);
-        console.log('showBoughtItems set to:', showBoughtItems);
-        const slider = toggle.nextElementSibling;
-        console.log('Slider element:', slider);
-        if (slider) {
-            const computedStyle = window.getComputedStyle(slider);
-            console.log('Slider background-color:', computedStyle.backgroundColor);
-            console.log('Slider display:', computedStyle.display);
-            console.log('Slider visibility:', computedStyle.visibility);
-        }
     }
     if (currentListId) {
         loadListItems(currentListId);
