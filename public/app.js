@@ -1267,7 +1267,7 @@ function displayItems(items, groups = {}) {
                 Deselect All
             </button>
             <div class="move-to-controls" style="display:flex; gap: 8px; align-items:center; margin: 0 8px;">
-                <input type="text" id="moveToPositionInput" class="input" placeholder="Move to position (e.g., 3.1 or 7)">
+                <input type="text" id="moveToPositionInput" class="move-to-input" placeholder="Position (e.g., 3.1 or 7)" style="min-width: 120px; padding: 8px 12px; border: 1px solid var(--divider); border-radius: var(--border-radius); font-size: 0.875rem; background-color: var(--surface-color); color: var(--text-primary);">
                 <button class="btn btn-primary" id="moveToPositionBtn">
                     <span class="material-icons">swap_vert</span>
                     Move To
@@ -1289,25 +1289,70 @@ function displayItems(items, groups = {}) {
     const moveInputEl = document.getElementById('moveToPositionInput');
     const moveBtnEl = document.getElementById('moveToPositionBtn');
     if (moveBtnEl && moveInputEl) {
+        // Ensure input is focusable and editable
+        moveInputEl.style.pointerEvents = 'auto';
+        moveInputEl.style.userSelect = 'text';
+        moveInputEl.style.webkitUserSelect = 'text';
+        moveInputEl.style.mozUserSelect = 'text';
+        moveInputEl.style.msUserSelect = 'text';
+        moveInputEl.removeAttribute('readonly');
+        moveInputEl.removeAttribute('disabled');
+        moveInputEl.setAttribute('autocomplete', 'off');
+        moveInputEl.setAttribute('autocorrect', 'off');
+        moveInputEl.setAttribute('autocapitalize', 'off');
+        moveInputEl.setAttribute('spellcheck', 'false');
+        
+        // Force input to be editable
+        moveInputEl.contentEditable = 'true';
+        moveInputEl.readOnly = false;
+        moveInputEl.disabled = false;
+        
         moveBtnEl.addEventListener('click', async () => {
             const raw = moveInputEl.value.trim();
             if (!raw) {
                 showToast('Please enter a position (e.g., 3.1 or 7)', 'warning');
+                moveInputEl.focus();
                 return;
             }
             try {
                 await moveSelectedItemsToPosition(raw);
+                // Clear input after successful move
+                moveInputEl.value = '';
             } catch (err) {
                 console.error('Error moving selected items:', err);
                 showToast('Error moving selected items: ' + (err.message || err), 'error');
             }
         });
+        
         moveInputEl.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 moveBtnEl.click();
             }
         });
+        
+        // Add focus event to ensure input is properly focused when clicked
+        moveInputEl.addEventListener('focus', function() {
+            this.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+            this.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+            console.log('Move to position input focused');
+        });
+        
+        moveInputEl.addEventListener('blur', function() {
+            this.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+            this.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        });
+        
+        // Add input event to verify typing works
+        moveInputEl.addEventListener('input', function() {
+            console.log('Move to position input value:', this.value);
+        });
+        
+        // Debug: Log input element properties
+        console.log('Move to position input element:', moveInputEl);
+        console.log('Input type:', moveInputEl.type);
+        console.log('Input readonly:', moveInputEl.readOnly);
+        console.log('Input disabled:', moveInputEl.disabled);
     }
 
     // Prepare grouping
@@ -2291,6 +2336,7 @@ async function moveSelectedItemsToPosition(rawPosition) {
         const itemsRef = db.collection('lists').doc(currentListId).collection('items');
         // Determine the base absolute insertion position for a single item at the requested spot
         const baseAbsolute = await parseCompositeOrAbsolutePosition(String(rawPosition || '').trim(), itemsRef);
+        console.log('Position parsing result:', { rawPosition, baseAbsolute });
 
         // Fetch the current ordering
         const snap = await itemsRef.orderBy('position', 'asc').get();
@@ -2341,19 +2387,58 @@ async function moveSelectedItemsToPosition(rawPosition) {
             ...others.slice(insertionIndex)
         ];
 
+        // Check if positions actually changed
+        const positionsChanged = newOrder.some((item, idx) => {
+            const oldItem = allItems.find(old => old.id === item.id);
+            return oldItem && oldItem.position !== (idx + 1);
+        });
+
+        if (!positionsChanged) {
+            showToast('Items are already in the requested positions', 'warning');
+            hideLoading();
+            return;
+        }
+
         // Write back positions in a single batch
         const batch = db.batch();
         newOrder.forEach((it, idx) => {
+            console.log(`Updating item ${it.name} (${it.id}) to position ${idx + 1}`);
             batch.update(itemsRef.doc(it.id), {
                 position: idx + 1,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
         });
+        
+        console.log('Committing batch updates...');
         await batch.commit();
+        console.log('Batch commit completed');
 
-        showToast(`Moved ${selectedOrdered.length} item(s) to position ${String(rawPosition).trim()}`, 'success');
+        const moveDetails = {
+            rawPosition: String(rawPosition).trim(),
+            baseAbsolute,
+            selectedOrdered: selectedOrdered.map(it => ({ id: it.id, name: it.name, oldPosition: it.position })),
+            newOrder: newOrder.map((it, idx) => ({ id: it.id, name: it.name, newPosition: idx + 1 }))
+        };
+        
+        console.log('Move completed:', moveDetails);
+
+        // Show more detailed success message
+        const itemNames = selectedOrdered.map(it => it.name).join(', ');
+        showToast(`Moved ${selectedOrdered.length} item(s) (${itemNames}) to position ${String(rawPosition).trim()}`, 'success');
+        // Clear selection after successful move
+        selectedItems = [];
+        lastSelectedItemId = null;
+        updateSelectionUI();
+        updateSelectionActionBar();
+        
         // Reload items to reflect new order
         await loadListItems(currentListId);
+        
+        // Force UI update to ensure selection bar is hidden
+        setTimeout(() => {
+            updateSelectionActionBar();
+            updateSelectionUI();
+        }, 100);
     } catch (err) {
         console.error('Error moving selected items:', err);
         showToast('Error moving selected items: ' + (err.message || err), 'error');
