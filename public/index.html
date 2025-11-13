@@ -107,6 +107,15 @@
                     <h2 id="listTitle">Loading...</h2>
                     <p id="listEventDate"></p>
                     <div class="list-controls">
+                        <div class="sort-controls">
+                            <label for="sortSelect">Sort by:</label>
+                            <select id="sortSelect" class="sort-select">
+                                <option value="creators">Creator's Order</option>
+                                <option value="price-high">Price (High to Low)</option>
+                                <option value="price-low">Price (Low to High)</option>
+                                <option value="alphabetical">Alphabetical</option>
+                            </select>
+                        </div>
                         <label class="switch" id="viewerModeToggle">
                             <input type="checkbox" id="showAsViewerToggle">
                             <span class="slider"></span>

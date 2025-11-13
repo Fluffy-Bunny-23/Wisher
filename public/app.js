@@ -8,6 +8,7 @@ let showAsViewer = false; // New global variable for viewer mode
 let geminiApiKey = localStorage.getItem('geminiApiKey') || '';
 let selectedItems = [];
 let lastSelectedItemId = null;
+let currentSortMethod = 'creators'; // Default sort method
 
 // DOM elements
 const authScreen = document.getElementById('authScreen');
@@ -591,6 +592,14 @@ function setupEventListeners() {
             console.error('Element not found: showAsViewerToggle');
         }
         
+        // Sort controls
+        const sortSelect = document.getElementById('sortSelect');
+        if (sortSelect) {
+            sortSelect.addEventListener('change', handleSortChange);
+        } else {
+            console.error('Element not found: sortSelect');
+        }
+        
 
         
         // Share buttons
@@ -981,6 +990,9 @@ async function loadList(listId) {
         currentList = { id: listDoc.id, ...listDoc.data() };
         currentListId = listId;
         
+        // Reset sort method to default (creators order) when loading a new list
+        currentSortMethod = 'creators';
+        
         // Debug: Log the eventDate to see what format it's in
         console.log('loadList: currentList.eventDate =', currentList.eventDate);
         console.log('loadList: typeof currentList.eventDate =', typeof currentList.eventDate);
@@ -1023,6 +1035,14 @@ async function loadList(listId) {
 function displayList(list) {
     document.getElementById('listTitle').textContent = list.name;
     document.getElementById('listEventDate').textContent = list.eventDate ? `Event: ${formatDate(list.eventDate)}` : '';
+    
+    // Set sort select to current sort method
+    const sortSelect = document.getElementById('sortSelect');
+    if (sortSelect) {
+        sortSelect.value = currentSortMethod;
+    } else {
+        console.log('Sort select not found during displayList');
+    }
 
         // Show/hide import button based on ownership
         const importListBtn = document.getElementById('importListBtn');
@@ -1103,7 +1123,10 @@ async function loadListItems(listId) {
         });
         
         console.log(`Loaded ${items.length} items and ${Object.keys(groups).length} groups for list ${listId}`);
-        displayItems(items, groups);
+        
+        // Apply sorting to items
+        const sortedItems = sortItems(items, groups);
+        displayItems(sortedItems, groups);
         setupDragAndDrop();
         clearTimeout(safetyTimeout);
     } catch (error) {
@@ -1279,6 +1302,11 @@ function displayItems(items, groups = {}) {
             itemsByGroup[gid].push(item);
         }
     });
+    
+    // Sort items within each group
+    Object.keys(itemsByGroup).forEach(gid => {
+        itemsByGroup[gid] = sortItems(itemsByGroup[gid], groups);
+    });
 
     // Build a map of triggerItemId -> [groupIds] to attach groups near their trigger item
     const triggerToGroups = {};
@@ -1415,8 +1443,11 @@ function displayItems(items, groups = {}) {
             localStorage.setItem('collapsedGroups', JSON.stringify(collapsedGroups));
         });
 
+        // Sort items within groups
+        const sortedGroupItems = sortItems(groupItems, groups);
+        
         // Group items use composite numbering (group#.item#, e.g., "2.1" if group is #2)
-        groupItems.forEach((item, idx) => {
+        sortedGroupItems.forEach((item, idx) => {
             const compositeLabel = `${groupDisplayIndex[groupId]}.${idx + 1}`;
             const itemCard = createItemCard(item, compositeLabel);
             itemsContainer.appendChild(itemCard);
@@ -1427,16 +1458,20 @@ function displayItems(items, groups = {}) {
         renderedGroups.add(groupId);
     }
 
+    // Sort ungrouped items
+    const sortedUngroupedItems = sortItems(ungroupedItems, groups);
+    
     // Render ungrouped items first; attach any reliant items and groups triggered by each item directly after
-    if (ungroupedItems.length > 0) {
-        ungroupedItems.forEach((item) => {
+    if (sortedUngroupedItems.length > 0) {
+        sortedUngroupedItems.forEach((item) => {
             const label = String(displayCounter++);
             const itemCard = createItemCard(item, label);
             container.appendChild(itemCard);
 
             // Render reliant items that depend on this item
             const itemReliants = reliantItems[item.id] || [];
-            itemReliants.forEach(reliantItem => {
+            const sortedReliants = sortItems(itemReliants, groups);
+            sortedReliants.forEach(reliantItem => {
                 const reliantLabel = String(displayCounter++);
                 const reliantCard = createItemCard(reliantItem, reliantLabel);
                 
@@ -1481,6 +1516,56 @@ function displayItems(items, groups = {}) {
     } catch (err) {
         console.error('Error during persistence step:', err);
     }
+}
+
+function handleSortChange() {
+    const sortSelect = document.getElementById('sortSelect');
+    currentSortMethod = sortSelect.value;
+    
+    // Reload and re-sort items
+    loadListItems(currentListId);
+}
+
+function sortItems(items, groups = {}) {
+    // Don't sort if using creator's order
+    if (currentSortMethod === 'creators') {
+        return items.sort((a, b) => (a.position || 0) - (b.position || 0));
+    }
+    
+    let sortedItems = [...items];
+    
+    switch (currentSortMethod) {
+        case 'price-high':
+            sortedItems.sort((a, b) => {
+                const priceA = parseFloat(a.price) || 0;
+                const priceB = parseFloat(b.price) || 0;
+                return priceB - priceA; // High to low
+            });
+            break;
+            
+        case 'price-low':
+            sortedItems.sort((a, b) => {
+                const priceA = parseFloat(a.price) || 0;
+                const priceB = parseFloat(b.price) || 0;
+                return priceA - priceB; // Low to high
+            });
+            break;
+            
+        case 'alphabetical':
+            sortedItems.sort((a, b) => {
+                const nameA = (a.name || '').toLowerCase();
+                const nameB = (b.name || '').toLowerCase();
+                return nameA.localeCompare(nameB);
+            });
+            break;
+            
+        default:
+            // Default to creator's order
+            sortedItems.sort((a, b) => (a.position || 0) - (b.position || 0));
+            break;
+    }
+    
+    return sortedItems;
 }
 
 // Persist an array of item IDs (in display order) to Firestore by updating their numeric positions.
