@@ -263,6 +263,21 @@ p {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
+/* Move buttons styling */
+.move-button {
+  background-color: rgba(33, 150, 243, 0.1);
+  color: #2196F3;
+}
+
+.move-button:hover {
+  background-color: rgba(33, 150, 243, 0.2);
+}
+
+.move-button:active {
+  background-color: rgba(33, 150, 243, 0.3);
+  transform: scale(0.95);
+}
+
 /* Main Content */
 .main-content {
   margin-top: 64px;

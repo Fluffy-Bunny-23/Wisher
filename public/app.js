@@ -9,6 +9,7 @@ let geminiApiKey = localStorage.getItem('geminiApiKey') || '';
 let selectedItems = [];
 let lastSelectedItemId = null;
 let currentSortMethod = 'creators'; // Default sort method
+let showExtensiveMovingButtons = false; // Toggle for extensive moving buttons
 
 // DOM elements
 const authScreen = document.getElementById('authScreen');
@@ -25,6 +26,9 @@ const appBar = document.getElementById('app-bar');
 
 // Snapshot used for undoing the last large reorder operation
 let lastReorderSnapshot = null;
+
+// Firebase services (initialized in firebase-config.js)
+// These are global variables, not redeclared here
 
 function showSyncIndicator() {
     const el = document.getElementById('syncIndicator');
@@ -269,7 +273,7 @@ async function handleSharedListAccess(listId, role) {
     }
 
     try {
-        const listRef = firebaseDb.collection('lists').doc(listId);
+        const listRef = db.collection('lists').doc(listId);
         const doc = await listRef.get();
 
         if (doc.exists) {
@@ -592,6 +596,14 @@ function setupEventListeners() {
             console.error('Element not found: showAsViewerToggle');
         }
         
+        // Extensive moving buttons toggle
+        const showExtensiveMovingToggle = document.getElementById('showExtensiveMovingToggle');
+        if (showExtensiveMovingToggle) {
+            showExtensiveMovingToggle.addEventListener('change', toggleExtensiveMovingButtons);
+        } else {
+            console.error('Element not found: showExtensiveMovingToggle');
+        }
+        
         // Sort controls
         const sortSelect = document.getElementById('sortSelect');
         if (sortSelect) {
@@ -833,8 +845,8 @@ async function loadUserLists() {
     try {
         showLoading();
         
-        // Check if firebaseDb is initialized
-        if (!firebaseDb) {
+        // Check if db is initialized
+        if (!db) {
             console.error('Firestore database not initialized');
             clearTimeout(safetyTimeout);
             hideLoading();
@@ -843,10 +855,10 @@ async function loadUserLists() {
         }
         
         console.log('Querying Firestore for lists owned by:', currentUser.email);
-        const listsQuery = firebaseDb.collection('lists')
+        const listsQuery = db.collection('lists')
             .where('owner', '==', currentUser.email);
         
-        const collaboratorQuery = firebaseDb.collection('lists')
+        const collaboratorQuery = db.collection('lists')
             .where('collaborators', 'array-contains', currentUser.email);
         
         console.log('Fetching lists from Firestore...');
@@ -943,7 +955,7 @@ async function createNewList() {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         
-        const docRef = await firebaseDb.collection('lists').add(listData);
+        const docRef = await db.collection('lists').add(listData);
         currentListId = docRef.id;
         
         showToast('List created successfully!', 'success');
@@ -966,8 +978,8 @@ async function loadList(listId) {
     try {
         showLoading();
         
-        // Check if firebaseDb is initialized
-        if (!firebaseDb) {
+        // Check if db is initialized
+        if (!db) {
             console.error('Firestore database not initialized in loadList');
             clearTimeout(safetyTimeout);
             hideLoading();
@@ -976,7 +988,7 @@ async function loadList(listId) {
         }
         
         console.log('Loading list with ID:', listId);
-        const listDoc = await firebaseDb.collection('lists').doc(listId).get();
+        const listDoc = await db.collection('lists').doc(listId).get();
         
         if (!listDoc.exists) {
             console.log('List not found:', listId);
@@ -1066,6 +1078,12 @@ function displayList(list) {
     );
     const canEdit = isOwner || isCollaborator;
 
+    // Show/hide extensive moving toggle for owners/collaborators
+    const extensiveMovingToggle = document.getElementById('extensiveMovingToggle');
+    if (extensiveMovingToggle) {
+        extensiveMovingToggle.style.display = canEdit ? 'flex' : 'none';
+    }
+
     // Show/hide viewer mode toggle for owners/collaborators
     const viewerModeToggle = document.getElementById('viewerModeToggle');
     if (viewerModeToggle) {
@@ -1090,8 +1108,8 @@ async function loadListItems(listId) {
     }, 10000);
     
     try {
-        // Check if firebaseDb is initialized
-        if (!firebaseDb) {
+        // Check if db is initialized
+        if (!db) {
             console.error('Firestore database not initialized in loadListItems');
             clearTimeout(safetyTimeout);
             showToast('Database connection error. Please refresh the page.', 'error');
@@ -1102,8 +1120,8 @@ async function loadListItems(listId) {
         
         // Fetch both items and groups in parallel
         const [itemsSnapshot, groupsSnapshot] = await Promise.all([
-            firebaseDb.collection('lists').doc(listId).collection('items').orderBy('position', 'asc').get(),
-            firebaseDb.collection('lists').doc(listId).collection('groups').get()
+            db.collection('lists').doc(listId).collection('items').orderBy('position', 'asc').get(),
+            db.collection('lists').doc(listId).collection('groups').get()
         ]);
         
         const items = [];
@@ -1507,9 +1525,10 @@ function displayItems(items, groups = {}) {
     });
 
     // After rendering, persist the visible ordering back to the database so stored positions match display order.
-    // Only attempt to write if the current user can edit the list (owner or collaborator).
+    // Only attempt to write if the current user can edit the list (owner or collaborator) AND we're in creators order mode.
+    // Don't persist when just sorting for viewing - only when actually reordering items.
     try {
-        if (canEdit && firebaseDb && currentListId) {
+        if (canEdit && db && currentListId && currentSortMethod === 'creators') {
             // Persist DOM order including groups (handles empty groups now)
             persistDomOrder(container).catch(err => console.error('Error persisting order to DB:', err));
         }
@@ -1571,15 +1590,15 @@ function sortItems(items, groups = {}) {
 // Persist an array of item IDs (in display order) to Firestore by updating their numeric positions.
 // Handles large lists by chunking batch commits to avoid Firestore batch size limits.
 async function persistVisibleOrderToDb(orderedItemIds) {
-    if (!currentListId || !firebaseDb) return;
+    if (!currentListId || !db) return;
     if (!Array.isArray(orderedItemIds) || orderedItemIds.length === 0) return;
 
-    const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+    const itemsRef = db.collection('lists').doc(currentListId).collection('items');
     // Firestore limits batches to 500 operations. Use safe chunk size (e.g., 400).
     const CHUNK_SIZE = 400;
     for (let i = 0; i < orderedItemIds.length; i += CHUNK_SIZE) {
         const chunk = orderedItemIds.slice(i, i + CHUNK_SIZE);
-        const batch = firebaseDb.batch();
+        const batch = db.batch();
         chunk.forEach((id, idx) => {
             const absolutePos = i + idx + 1; // 1-based positions across whole list
             batch.update(itemsRef.doc(id), {
@@ -1594,11 +1613,11 @@ async function persistVisibleOrderToDb(orderedItemIds) {
 // Persist ordering based on DOM structure, keeping group blocks and empty groups in mind.
 // This writes back numeric positions for items and a `position` field for groups indicating their block order.
 async function persistDomOrder(container) {
-    if (!currentListId || !firebaseDb) return;
+    if (!currentListId || !db) return;
     showSyncIndicator();
     try {
-        const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
-        const groupsRef = firebaseDb.collection('lists').doc(currentListId).collection('groups');
+        const itemsRef = db.collection('lists').doc(currentListId).collection('items');
+        const groupsRef = db.collection('lists').doc(currentListId).collection('groups');
 
         const itemsSequence = [];
         const groupSequenceNumbers = {}; // gid -> sequenceNumber (0-based for items, both items and groups in order)
@@ -1660,7 +1679,7 @@ async function persistDomOrder(container) {
         const CHUNK = 400;
         for (let i = 0; i < allWrites.length; i += CHUNK) {
             const chunk = allWrites.slice(i, i + CHUNK);
-            const batch = firebaseDb.batch();
+            const batch = db.batch();
             chunk.forEach(w => batch.update(w.ref, w.data));
             await batch.commit();
         }
@@ -1682,8 +1701,8 @@ async function undoLastReorder() {
     }
     showSyncIndicator();
     try {
-        const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
-        const groupsRef = firebaseDb.collection('lists').doc(currentListId).collection('groups');
+        const itemsRef = db.collection('lists').doc(currentListId).collection('items');
+        const groupsRef = db.collection('lists').doc(currentListId).collection('groups');
 
         const itemWrites = lastReorderSnapshot.items || [];
         const groupWrites = lastReorderSnapshot.groups || [];
@@ -1695,7 +1714,7 @@ async function undoLastReorder() {
         const CHUNK = 400;
         for (let i = 0; i < all.length; i += CHUNK) {
             const chunk = all.slice(i, i + CHUNK);
-            const batch = firebaseDb.batch();
+            const batch = db.batch();
             chunk.forEach(w => batch.update(w.ref, w.data));
             await batch.commit();
         }
@@ -1822,6 +1841,17 @@ function createItemCard(item, position) {
                     <button class="icon-button drag-handle" title="Drag to reorder">
                         <span class="material-icons">drag_indicator</span>
                     </button>
+                    ${showExtensiveMovingButtons ? `
+                        <button class="icon-button move-button" onclick="moveItemToTop('${item.id}')" title="Move to top">
+                            <span class="material-icons">keyboard_double_arrow_up</span>
+                        </button>
+                        <button class="icon-button move-button" onclick="moveItemToMiddle('${item.id}')" title="Move to middle">
+                            <span class="material-icons">drag_handle</span>
+                        </button>
+                        <button class="icon-button move-button" onclick="moveItemToBottom('${item.id}')" title="Move to bottom">
+                            <span class="material-icons">keyboard_double_arrow_down</span>
+                        </button>
+                    ` : ''}
                     <button class="icon-button" onclick="deleteItem('${item.id}', '${escapeHtml(item.name)}')" title="Delete">
                         <span class="material-icons">delete</span>
                     </button>
@@ -1942,7 +1972,7 @@ function createItemCard(item, position) {
 function editGroup(groupId) {
     console.log('Edit group:', groupId);
     try {
-        const groupRef = firebaseDb.collection('lists').doc(currentListId).collection('groups').doc(groupId);
+        const groupRef = db.collection('lists').doc(currentListId).collection('groups').doc(groupId);
         groupRef.get().then(doc => {
             if (!doc.exists) {
                 showToast('Group not found', 'error');
@@ -1993,13 +2023,13 @@ async function deleteGroup(groupId, groupName) {
     console.log('Delete group:', groupId, groupName);
     if (!confirm(`Delete group "${groupName}" and remove group assignment from its items? This cannot be undone.`)) return;
     try {
-        const listRef = firebaseDb.collection('lists').doc(currentListId);
+        const listRef = db.collection('lists').doc(currentListId);
         const groupRef = listRef.collection('groups').doc(groupId);
         const itemsRef = listRef.collection('items');
 
         // Unset groupId on any items in the group
         const groupItemsSnap = await itemsRef.where('groupId', '==', groupId).get();
-        const batch = firebaseDb.batch();
+        const batch = db.batch();
         groupItemsSnap.forEach(doc => {
             batch.update(itemsRef.doc(doc.id), { groupId: firebase.firestore.FieldValue.delete(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
         });
@@ -2019,7 +2049,7 @@ function showGroupInfo(groupId) {
     console.log('Show group info:', groupId);
     // Simple info display using modal: reuse group modal in read-only mode
     try {
-        const groupRef = firebaseDb.collection('lists').doc(currentListId).collection('groups').doc(groupId);
+        const groupRef = db.collection('lists').doc(currentListId).collection('groups').doc(groupId);
         groupRef.get().then(doc => {
             if (!doc.exists) { showToast('Group not found', 'error'); return; }
             const g = doc.data();
@@ -2155,8 +2185,8 @@ async function deleteSelectedItems() {
     showLoading();
     
     try {
-        const batch = firebaseDb.batch();
-        const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+        const batch = db.batch();
+        const itemsRef = db.collection('lists').doc(currentListId).collection('items');
         
         selectedItems.forEach(itemId => {
             batch.delete(itemsRef.doc(itemId));
@@ -2209,7 +2239,7 @@ async function moveSelectedItemsToPosition(rawPosition) {
 
     showLoading();
     try {
-        const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+        const itemsRef = db.collection('lists').doc(currentListId).collection('items');
         // Determine the base absolute insertion position for a single item at the requested spot
         const baseAbsolute = await parseCompositeOrAbsolutePosition(String(rawPosition || '').trim(), itemsRef);
 
@@ -2263,7 +2293,7 @@ async function moveSelectedItemsToPosition(rawPosition) {
         ];
 
         // Write back positions in a single batch
-        const batch = firebaseDb.batch();
+        const batch = db.batch();
         newOrder.forEach((it, idx) => {
             batch.update(itemsRef.doc(it.id), {
                 position: idx + 1,
@@ -2306,7 +2336,7 @@ async function moveGroupToPosition(groupId, rawPosition) {
 
     showLoading();
     try {
-        const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+        const itemsRef = db.collection('lists').doc(currentListId).collection('items');
         const baseAbsolute = await parseCompositeOrAbsolutePosition(String(rawPosition || '').trim(), itemsRef);
 
         // Fetch current ordering
@@ -2360,7 +2390,7 @@ async function moveGroupToPosition(groupId, rawPosition) {
         ];
 
         // Persist positions
-        const batch = firebaseDb.batch();
+        const batch = db.batch();
         newOrder.forEach((it, idx) => {
             batch.update(itemsRef.doc(it.id), {
                 position: idx + 1,
@@ -2370,8 +2400,8 @@ async function moveGroupToPosition(groupId, rawPosition) {
         await batch.commit();
 
         // Update displayOrder for groups based on their new positions
-        const groupsRef = firebaseDb.collection('lists').doc(currentListId).collection('groups');
-        const groupsBatch = firebaseDb.batch();
+        const groupsRef = db.collection('lists').doc(currentListId).collection('groups');
+        const groupsBatch = db.batch();
         const groupDocs = await groupsRef.get();
         const groupsInOrder = Array.from(groupDocs.docs)
             .map(doc => ({ id: doc.id, ...doc.data() }))
@@ -2390,6 +2420,129 @@ async function moveGroupToPosition(groupId, rawPosition) {
     } catch (err) {
         console.error('Error moving group:', err);
         showToast('Error moving group: ' + (err.message || err), 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function moveItemToTop(itemId) {
+    await moveItemToPosition(itemId, 1);
+}
+
+async function moveItemToMiddle(itemId) {
+    if (!currentListId) {
+        showToast('No active list selected', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        const itemsRef = db.collection('lists').doc(currentListId).collection('items');
+        const snap = await itemsRef.orderBy('position', 'asc').get();
+        const allItems = [];
+        snap.forEach(doc => allItems.push({ id: doc.id, ...doc.data() }));
+
+        const middlePosition = Math.ceil(allItems.length / 2);
+        await moveItemToPosition(itemId, middlePosition);
+    } catch (err) {
+        console.error('Error moving item to middle:', err);
+        showToast('Error moving item to middle: ' + (err.message || err), 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function moveItemToBottom(itemId) {
+    if (!currentListId) {
+        showToast('No active list selected', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        const itemsRef = db.collection('lists').doc(currentListId).collection('items');
+        const snap = await itemsRef.orderBy('position', 'asc').get();
+        const allItems = [];
+        snap.forEach(doc => allItems.push({ id: doc.id, ...doc.data() }));
+
+        const bottomPosition = allItems.length + 1;
+        await moveItemToPosition(itemId, bottomPosition);
+    } catch (err) {
+        console.error('Error moving item to bottom:', err);
+        showToast('Error moving item to bottom: ' + (err.message || err), 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function moveItemToPosition(itemId, targetPosition) {
+    if (!currentListId) {
+        showToast('No active list selected', 'error');
+        return;
+    }
+
+    const isOwner = currentUser && currentUser.email === currentList.owner;
+    const collaboratorsField = currentList.collaborators || [];
+    const isCollaborator = currentUser && (
+        Array.isArray(collaboratorsField)
+            ? collaboratorsField.includes(currentUser.email)
+            : typeof collaboratorsField === 'object' && collaboratorsField !== null
+                ? Object.values(collaboratorsField).includes(currentUser.email)
+                : false
+    );
+    const canEdit = isOwner || isCollaborator;
+
+    if (!canEdit) {
+        showToast('You don\'t have permission to move items', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        const itemsRef = db.collection('lists').doc(currentListId).collection('items');
+        
+        // Fetch current ordering
+        const snap = await itemsRef.orderBy('position', 'asc').get();
+        const allItems = [];
+        snap.forEach(doc => allItems.push({ id: doc.id, ...doc.data() }));
+
+        // Find the item to move
+        const itemToMove = allItems.find(item => item.id === itemId);
+        if (!itemToMove) {
+            showToast('Item not found', 'error');
+            return;
+        }
+
+        // Remove the item from the array
+        const otherItems = allItems.filter(item => item.id !== itemId);
+
+        // Calculate insertion index
+        let insertionIndex = Math.min(targetPosition - 1, otherItems.length);
+        insertionIndex = Math.max(0, insertionIndex);
+
+        // Insert the item at the new position
+        const newOrder = [
+            ...otherItems.slice(0, insertionIndex),
+            itemToMove,
+            ...otherItems.slice(insertionIndex)
+        ];
+
+        // Write back positions in a single batch
+        const batch = db.batch();
+        newOrder.forEach((item, idx) => {
+            batch.update(itemsRef.doc(item.id), {
+                position: idx + 1,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+        await batch.commit();
+
+        showToast('Item moved successfully', 'success');
+        // Reload items to reflect new order
+        await loadListItems(currentListId);
+    } catch (err) {
+        console.error('Error moving item:', err);
+        showToast('Error moving item: ' + (err.message || err), 'error');
     } finally {
         hideLoading();
     }
@@ -2469,8 +2622,8 @@ function setupDragAndDrop() {
                 });
 
                 // Update group positions in database
-                const groupsRef = firebaseDb.collection('lists').doc(currentListId).collection('groups');
-                const batch = firebaseDb.batch();
+                const groupsRef = db.collection('lists').doc(currentListId).collection('groups');
+                const batch = db.batch();
                 groupPositions.forEach((position, groupId) => {
                     batch.update(groupsRef.doc(groupId), {
                         position,
@@ -2510,7 +2663,7 @@ function populateGroupSelector() {
     }
 
     // Fetch groups from Firestore
-    firebaseDb.collection('lists').doc(currentListId).collection('groups')
+    db.collection('lists').doc(currentListId).collection('groups')
         .get()
         .then(snapshot => {
             if (snapshot.empty) {
@@ -2666,7 +2819,7 @@ function populateItemSelectorForConditional() {
     reliantSelector.innerHTML = '<option value="">Select an item...</option>';
     
     // Fetch items from Firestore
-    firebaseDb.collection('lists').doc(currentListId).collection('items')
+    db.collection('lists').doc(currentListId).collection('items')
         .orderBy('position')
         .get()
         .then(snapshot => {
@@ -2722,7 +2875,7 @@ function populateItemSelector() {
         if (!selector) return;
         selector.innerHTML = '<option value="">Select an item...</option>';
         if (!currentListId) return;
-        firebaseDb.collection('lists').doc(currentListId).collection('items')
+        db.collection('lists').doc(currentListId).collection('items')
             .orderBy('position')
             .get()
             .then(snapshot => {
@@ -2772,7 +2925,7 @@ async function saveGroup() {
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
-        const groupRef = firebaseDb.collection('lists').doc(currentListId).collection('groups');
+        const groupRef = db.collection('lists').doc(currentListId).collection('groups');
 
         const form = document.getElementById('groupForm');
         let createdOrUpdatedGroupId = null;
@@ -2810,7 +2963,7 @@ async function saveGroup() {
 
 function editItem(itemId) {
     // Find item in current list and load it into the edit modal
-    const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+    const itemsRef = db.collection('lists').doc(currentListId).collection('items');
     
     itemsRef.doc(itemId).get()
         .then(doc => {
@@ -2906,7 +3059,7 @@ function editItem(itemId) {
 
 function showItemInfo(itemId) {
     // Find the item in the current list items
-    const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+    const itemsRef = db.collection('lists').doc(currentListId).collection('items');
     itemsRef.doc(itemId).get()
         .then(doc => {
             if (doc.exists) {
@@ -3008,7 +3161,7 @@ async function confirmBuy() {
 async function performBuy(itemId, buyerName, buyerEmail, buyerNote) {
     try {
         // First, get the item to check its group
-        const itemDoc = await firebaseDb.collection('lists').doc(currentListId)
+        const itemDoc = await db.collection('lists').doc(currentListId)
             .collection('items').doc(itemId).get();
         
         if (!itemDoc.exists) {
@@ -3019,7 +3172,7 @@ async function performBuy(itemId, buyerName, buyerEmail, buyerNote) {
         const item = itemDoc.data();
         
         // Mark the current item as bought
-        await firebaseDb.collection('lists').doc(currentListId)
+        await db.collection('lists').doc(currentListId)
             .collection('items').doc(itemId).update({
                 bought: true,
                 buyerName: buyerName,
@@ -3030,12 +3183,12 @@ async function performBuy(itemId, buyerName, buyerEmail, buyerNote) {
         
         // Check if item belongs to a group with auto-buy enabled
         if (item.groupId) {
-            const groupDoc = await firebaseDb.collection('lists').doc(currentListId)
+            const groupDoc = await db.collection('lists').doc(currentListId)
                 .collection('groups').doc(item.groupId).get();
             
             if (groupDoc.exists && groupDoc.data().autoBuy) {
                 // Get all items in this group that are not yet bought
-                const groupItemsSnapshot = await firebaseDb.collection('lists').doc(currentListId)
+                const groupItemsSnapshot = await db.collection('lists').doc(currentListId)
                     .collection('items')
                     .where('groupId', '==', item.groupId)
                     .where('bought', '==', false)
@@ -3045,7 +3198,7 @@ async function performBuy(itemId, buyerName, buyerEmail, buyerNote) {
                 const batch = firebase.firestore().batch();
                 groupItemsSnapshot.forEach(doc => {
                     if (doc.id !== itemId) { // Don't update the item we just bought
-                        const itemRef = firebaseDb.collection('lists').doc(currentListId)
+                        const itemRef = db.collection('lists').doc(currentListId)
                             .collection('items').doc(doc.id);
                         batch.update(itemRef, {
                             bought: true,
@@ -3084,7 +3237,7 @@ async function markAsNotBought(itemId) {
     }
     
     try {
-        await firebaseDb.collection('lists').doc(currentListId)
+        await db.collection('lists').doc(currentListId)
             .collection('items').doc(itemId).update({
                 bought: false,
                 buyerName: firebase.firestore.FieldValue.delete(),
@@ -3106,7 +3259,7 @@ async function unmarkAsBought(itemId) {
     }
     
     try {
-        await firebaseDb.collection('lists').doc(currentListId)
+        await db.collection('lists').doc(currentListId)
             .collection('items').doc(itemId).update({
                 bought: false,
                 buyerName: firebase.firestore.FieldValue.delete(),
@@ -3164,7 +3317,7 @@ async function addComment(itemId) {
     
     try {
         // Get the current item to add the comment to its comments array
-        const itemRef = firebaseDb.collection('lists').doc(currentListId)
+        const itemRef = db.collection('lists').doc(currentListId)
             .collection('items').doc(itemId);
         
         const itemDoc = await itemRef.get();
@@ -3228,7 +3381,7 @@ async function editComment(itemId, commentId, commentIndex) {
     
     try {
         // Get the current item and comment
-        const itemRef = firebaseDb.collection('lists').doc(currentListId).collection('items').doc(itemId);
+        const itemRef = db.collection('lists').doc(currentListId).collection('items').doc(itemId);
         const itemDoc = await itemRef.get();
         
         if (!itemDoc.exists) {
@@ -3346,7 +3499,7 @@ async function deleteComment(itemId, commentId, commentIndex) {
     
     try {
         // Get current item and comment
-        const itemRef = firebaseDb.collection('lists').doc(currentListId).collection('items').doc(itemId);
+        const itemRef = db.collection('lists').doc(currentListId).collection('items').doc(itemId);
         const itemDoc = await itemRef.get();
         
         if (!itemDoc.exists) {
@@ -3421,7 +3574,7 @@ async function parseCompositeOrAbsolutePosition(raw, itemsRef) {
         }
 
         // Build groups map
-        const groupsSnap = await firebaseDb.collection('lists').doc(currentListId).collection('groups').get();
+        const groupsSnap = await db.collection('lists').doc(currentListId).collection('groups').get();
         const groupsMap = {};
         groupsSnap.forEach(doc => { groupsMap[doc.id] = { id: doc.id, ...doc.data() }; });
 
@@ -3668,7 +3821,7 @@ async function saveItem() {
     // Determine desired absolute position from input; support composite like "G.I" or absolute numbers; default to append at end
     const posInputEl = document.getElementById('itemPosition');
     const rawPos = posInputEl ? (posInputEl.value || '').trim() : '';
-    const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+    const itemsRef = db.collection('lists').doc(currentListId).collection('items');
     const desiredPosition = await parseCompositeOrAbsolutePosition(rawPos, itemsRef);
     
     const conditionalVisibility = document.getElementById('itemConditionalVisibility').checked;
@@ -3715,7 +3868,7 @@ async function saveItem() {
         showLoading();
         
         if (form.dataset.mode === 'add') {
-            await firebaseDb.collection('lists').doc(currentListId)
+            await db.collection('lists').doc(currentListId)
                 .collection('items').add(itemData);
             showToast('Item added successfully!', 'success');
         } else {
@@ -3730,7 +3883,7 @@ async function saveItem() {
             if (!rawPos) {
                 delete itemData.position;
             }
-            await firebaseDb.collection('lists').doc(currentListId)
+            await db.collection('lists').doc(currentListId)
                 .collection('items').doc(itemId).update(itemData);
             showToast('Item updated successfully!', 'success');
         }
@@ -3746,7 +3899,7 @@ async function saveItem() {
 
 async function updateItemPosition(itemId, newPosition) {
     // Allow composite (e.g., "3.2") or absolute; convert to absolute then clamp to [1, last+1]
-    const itemsRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+    const itemsRef = db.collection('lists').doc(currentListId).collection('items');
     let absolute = typeof newPosition === 'number' ? newPosition : await parseCompositeOrAbsolutePosition(String(newPosition || '').trim(), itemsRef);
     const snap = await itemsRef.get();
     const clamped = Math.max(1, Math.min(absolute, snap.size + 1));
@@ -3776,7 +3929,7 @@ function loadSettings() {
 async function summarizeItem(itemId) {
     try {
         // Get the item details
-        const itemDoc = await firebaseDb.collection('lists').doc(currentListId).collection('items').doc(itemId).get();
+        const itemDoc = await db.collection('lists').doc(currentListId).collection('items').doc(itemId).get();
         const item = itemDoc.data();
         if (!item) {
             showToast('Item not found', 'error');
@@ -3784,7 +3937,7 @@ async function summarizeItem(itemId) {
         }
 
         // Get the list's Gemini API key if available
-        const listDoc = await firebaseDb.collection('lists').doc(currentListId).get();
+        const listDoc = await db.collection('lists').doc(currentListId).get();
         const list = listDoc.data();
         const apiKey = list.geminiApiKey;
 
@@ -3834,7 +3987,7 @@ async function handleTempApiKey() {
     }
 
     try {
-        const itemDoc = await firebaseDb.collection('lists').doc(currentListId).collection('items').doc(itemId).get();
+        const itemDoc = await db.collection('lists').doc(currentListId).collection('items').doc(itemId).get();
         const item = itemDoc.data();
         
         hideModal('apiKeyModal');
@@ -3850,7 +4003,7 @@ async function performItemSummarization(itemId, itemName, apiKey) {
     try {
         const result = await summarizeItemName(itemName, apiKey);
         if (result && result.description) {
-            await firebaseDb.collection('lists').doc(currentListId).collection('items').doc(itemId).update({
+            await db.collection('lists').doc(currentListId).collection('items').doc(itemId).update({
                 description: result.description,
                 notes: result.notes || '',
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -4054,7 +4207,7 @@ function populateUsersList(listId, users) {
 function removeUser(emailToRemove, role) {
     if (!currentList || !currentListId) return;
     
-    const listRef = firebaseDb.collection('lists').doc(currentListId);
+    const listRef = db.collection('lists').doc(currentListId);
     const updateData = {};
     updateData[role] = firebase.firestore.FieldValue.arrayRemove(emailToRemove);
     
@@ -4062,7 +4215,7 @@ function removeUser(emailToRemove, role) {
         .then(() => {
             showToast(`User removed from ${role}`, 'success');
             // Refresh the list in the modal
-            return firebaseDb.collection('lists').doc(currentListId).get();
+            return db.collection('lists').doc(currentListId).get();
         })
         .then(doc => {
             if (doc && doc.exists) {
@@ -4095,7 +4248,7 @@ function addUserToList(role) {
     }
     
     // Find user by email
-    firebaseDb.collection('users').where('email', '==', email).get()
+    db.collection('users').where('email', '==', email).get()
         .then(snapshot => {
             if (snapshot.empty) {
                 showToast('User not found', 'error');
@@ -4113,7 +4266,7 @@ function addUserToList(role) {
             }
             
             // Update the list document
-            const listRef = firebaseDb.collection('lists').doc(currentListId);
+            const listRef = db.collection('lists').doc(currentListId);
             const updateData = {};
             const rolePath = role === 'collaborator' ? 'collaborators' : 'viewers';
             updateData[rolePath] = firebase.firestore.FieldValue.arrayUnion(userData.email);
@@ -4125,7 +4278,7 @@ function addUserToList(role) {
             document.getElementById(inputId).value = '';
             
             // Refresh the current list data
-            return firebaseDb.collection('lists').doc(currentListId).get();
+            return db.collection('lists').doc(currentListId).get();
         })
         .then(doc => {
             if (doc && doc.exists) {
@@ -4154,7 +4307,7 @@ function saveListEdit() {
     const description = document.getElementById('editListDescription').value.trim();
     const eventDate = document.getElementById('editListEventDate').value;
     const isPublic = document.getElementById('editListPublic').checked;
-    const listRef = firebaseDb.collection('lists').doc(currentListId);
+    const listRef = db.collection('lists').doc(currentListId);
     listRef.update({
         name,
         description,
@@ -4456,6 +4609,16 @@ function toggleViewerMode() {
     if (toggle) {
         showAsViewer = toggle.checked;
         showBoughtItems = toggle.checked;
+    }
+    if (currentListId) {
+        loadListItems(currentListId);
+    }
+}
+
+function toggleExtensiveMovingButtons() {
+    const toggle = document.getElementById('showExtensiveMovingToggle');
+    if (toggle) {
+        showExtensiveMovingButtons = toggle.checked;
     }
     if (currentListId) {
         loadListItems(currentListId);
@@ -4785,7 +4948,7 @@ function populateUsersList(listId, users) {
 function removeUser(uid, role) {
     if (!currentList || !currentListId) return;
     
-    const listRef = firebaseDb.collection('lists').doc(currentListId);
+    const listRef = db.collection('lists').doc(currentListId);
     const updateData = {};
     updateData[`${role}.${uid}`] = firebase.firestore.FieldValue.delete();
     
@@ -4823,7 +4986,7 @@ function addUserToList(role) {
     }
     
     // Find user by email
-    firebaseDb.collection('users').where('email', '==', email).get()
+    db.collection('users').where('email', '==', email).get()
         .then(snapshot => {
             if (snapshot.empty) {
                 showToast('User not found', 'error');
@@ -4841,7 +5004,7 @@ function addUserToList(role) {
             }
             
             // Update the list document
-            const listRef = firebaseDb.collection('lists').doc(currentListId);
+            const listRef = db.collection('lists').doc(currentListId);
             const updateData = {};
             const rolePath = role === 'collaborator' ? 'collaborators' : 'viewers';
             updateData[`${rolePath}.${userId}`] = userData.email;
@@ -4853,7 +5016,7 @@ function addUserToList(role) {
             document.getElementById(inputId).value = '';
             
             // Refresh the current list data
-            return firebaseDb.collection('lists').doc(currentListId).get();
+            return db.collection('lists').doc(currentListId).get();
         })
         .then(doc => {
             if (doc && doc.exists) {
@@ -4883,7 +5046,7 @@ function saveListEdit() {
     const isPublic = document.getElementById('editListPublic').checked;
     const ordered = document.getElementById('editListOrdered').checked;
     
-    const listRef = firebaseDb.collection('lists').doc(currentListId);
+    const listRef = db.collection('lists').doc(currentListId);
     listRef.update({
         name,
         description,
@@ -4988,7 +5151,7 @@ async function importList() {
                         throw new Error('Invalid JSON format. Expected an array of items.');
                     }
 
-                    const listItemsCollectionRef = firebaseDb.collection('lists').doc(currentListId).collection('items');
+                    const listItemsCollectionRef = db.collection('lists').doc(currentListId).collection('items');
 
                     // Get current position once, outside the loop
                     const currentSize = (await listItemsCollectionRef.get()).size;
@@ -5073,7 +5236,7 @@ async function deleteItem(itemId, itemName) {
 
     if (confirm(`Are you sure you want to delete '${itemName}'? This action cannot be undone.`)) {
         try {
-            await firebaseDb.collection('lists').doc(currentListId).collection('items').doc(itemId).delete();
+            await db.collection('lists').doc(currentListId).collection('items').doc(itemId).delete();
             showToast(`'${itemName}' deleted successfully!`, 'success');
             loadListItems(currentListId); // Refresh the UI
         } catch (error) {
@@ -5603,7 +5766,7 @@ function populateUsersList(listId, users) {
 function removeUser(uid, role) {
     if (!currentList || !currentListId) return;
     
-    const listRef = firebaseDb.collection('lists').doc(currentListId);
+    const listRef = db.collection('lists').doc(currentListId);
     const updateData = {};
     updateData[`${role}.${uid}`] = firebase.firestore.FieldValue.delete();
     
@@ -5641,7 +5804,7 @@ function addUserToList(role) {
     }
     
     // Find user by email
-    firebaseDb.collection('users').where('email', '==', email).get()
+    db.collection('users').where('email', '==', email).get()
         .then(snapshot => {
             if (snapshot.empty) {
                 showToast('User not found', 'error');
@@ -5659,7 +5822,7 @@ function addUserToList(role) {
             }
             
             // Update the list document
-            const listRef = firebaseDb.collection('lists').doc(currentListId);
+            const listRef = db.collection('lists').doc(currentListId);
             const updateData = {};
             const rolePath = role === 'collaborator' ? 'collaborators' : 'viewers';
             updateData[`${rolePath}.${userId}`] = userData.email;
@@ -5671,7 +5834,7 @@ function addUserToList(role) {
             document.getElementById(inputId).value = '';
             
             // Refresh the current list data
-            return firebaseDb.collection('lists').doc(currentListId).get();
+            return db.collection('lists').doc(currentListId).get();
         })
         .then(doc => {
             if (doc && doc.exists) {
@@ -5701,7 +5864,7 @@ function saveListEdit() {
     const isPublic = document.getElementById('editListPublic').checked;
     const ordered = document.getElementById('editListOrdered').checked;
     
-    const listRef = firebaseDb.collection('lists').doc(currentListId);
+    const listRef = db.collection('lists').doc(currentListId);
     listRef.update({
         name,
         description,
