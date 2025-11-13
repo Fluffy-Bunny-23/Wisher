@@ -1,6 +1,4 @@
 /.vercel
-/DB Stucture.json
-/firebase-config.js
 /public/firebase-config.js
 /.trae
 amazon_ex_*
