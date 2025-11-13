@@ -2,7 +2,7 @@
 let currentUser = null;
 let currentList = null;
 let currentListId = null;
-let currentListRole = null; // Global variable to store the role from the URL
+let currentListRole = null; // Global variable to store role from URL
 let showBoughtItems = false;
 let showAsViewer = false; // New global variable for viewer mode
 let geminiApiKey = localStorage.getItem('geminiApiKey') || '';
@@ -10,6 +10,7 @@ let selectedItems = [];
 let lastSelectedItemId = null;
 let currentSortMethod = 'creators'; // Default sort method
 let showExtensiveMovingButtons = false; // Toggle for extensive moving buttons
+let currentTheme = localStorage.getItem('theme') || 'light'; // Theme state
 
 // DOM elements
 const authScreen = document.getElementById('authScreen');
@@ -180,6 +181,9 @@ function updateTabTitle() {
 function initializeApp() {
     console.log('Initializing app');
     try {
+        // Initialize theme
+        initializeTheme();
+        
         // Update tab title based on hostname
         updateTabTitle();
 
@@ -224,6 +228,45 @@ function initializeApp() {
         console.log('App initialization completed');
     } catch (error) {
         console.error('Error initializing app:', error);
+    }
+}
+
+function initializeTheme() {
+    // Apply saved theme
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    updateThemeIcon();
+    
+    // Listen for system theme changes
+    if (window.matchMedia) {
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        mediaQuery.addListener(handleSystemThemeChange);
+    }
+}
+
+function handleSystemThemeChange(e) {
+    // Only auto-switch if user hasn't manually set a preference
+    if (!localStorage.getItem('theme')) {
+        currentTheme = e.matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', currentTheme);
+        updateThemeIcon();
+    }
+}
+
+function toggleTheme() {
+    currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    localStorage.setItem('theme', currentTheme);
+    updateThemeIcon();
+    showToast(`Switched to ${currentTheme} mode`, 'success');
+}
+
+function updateThemeIcon() {
+    const themeToggle = document.getElementById('themeToggle');
+    if (themeToggle) {
+        const icon = themeToggle.querySelector('.material-icons');
+        if (icon) {
+            icon.textContent = currentTheme === 'light' ? 'dark_mode' : 'light_mode';
+        }
     }
 }
 
@@ -465,6 +508,14 @@ function setupEventListeners() {
             userBtn.addEventListener('click', () => showModal('userProfileModal'));
         } else {
             console.error('Element not found: userBtn');
+        }
+        
+        // Theme toggle
+        const themeToggle = document.getElementById('themeToggle');
+        if (themeToggle) {
+            themeToggle.addEventListener('click', toggleTheme);
+        } else {
+            console.error('Element not found: themeToggle');
         }
 
         const logoutButton = document.getElementById('logoutButton');
