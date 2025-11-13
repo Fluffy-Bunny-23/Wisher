@@ -4507,14 +4507,17 @@ function generateQRCode(type) {
             return;
         }
         
-        const canvas = document.getElementById('qrCanvas');
+        const qrDiv = document.getElementById('qrCanvas');
         const container = document.getElementById('qrCodeContainer');
+        
+        // Clear any existing QR code
+        qrDiv.innerHTML = '';
         
         // Check if QRCode library is available
         console.log('typeof QRCode:', typeof QRCode);
         if (typeof QRCode !== 'undefined') {
             try {
-                 new QRCode(canvas, {
+                 new QRCode(qrDiv, {
                      text: url,
                      width: 200,
                      height: 200,
@@ -4526,10 +4529,10 @@ function generateQRCode(type) {
                  console.log(`QR code generated for type: ${type}`);
              } catch (error) {
                  console.error("Error generating QR code:", error);
-                 showFallbackQRCode(url, container, canvas);
+                 showFallbackQRCode(url, container, qrDiv);
              }
         } else {
-            showFallbackQRCode(url, container, canvas);
+            showFallbackQRCode(url, container, qrDiv);
         }
     } catch (error) {
         console.error('QR Code generation error:', error);

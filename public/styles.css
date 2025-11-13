@@ -1260,6 +1260,9 @@ input:checked + .slider:before {
 #qrCanvas {
   border: 1px solid var(--divider);
   border-radius: var(--border-radius);
+  display: inline-block;
+  padding: 16px;
+  background: white;
 }
 
 .qr-fallback {
