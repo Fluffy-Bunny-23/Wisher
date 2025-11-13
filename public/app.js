@@ -17,6 +17,7 @@ const listScreen = document.getElementById('listScreen');
 const wishlistScreen = document.getElementById('wishlistScreen');
 const loadingSpinner = document.getElementById('loadingSpinner');
 const sidebar = document.getElementById('sidebar');
+const sidebarBackdrop = document.getElementById('sidebarBackdrop');
 const sidebarCloseBtn = document.getElementById('sidebarCloseBtn');
 const sidebarListContainer = document.getElementById('sidebarListContainer');
 const createListSidebarBtn = document.getElementById('createListSidebarBtn');
@@ -660,15 +661,42 @@ function setupEventListeners() {
         
         // Sidebar event listeners
         if (menuButton) {
-            menuButton.addEventListener('click', toggleSidebar);
+            menuButton.addEventListener('click', toggleSidebarNew);
         } else {
             console.error('Element not found: menuButton');
         }
         
         if (sidebarCloseBtn) {
+            sidebarCloseBtn.addEventListener('click', toggleSidebarNew);
+        } else {
+            console.error('Element not found: sidebarCloseBtn');
+        }
+        
+        if (sidebarBackdrop) {
+            sidebarBackdrop.addEventListener('click', toggleSidebarNew);
+        } else {
+            console.error('Element not found: sidebarBackdrop');
+        }
+        
+        if (createListSidebarBtn) {
+            createListSidebarBtn.addEventListener('click', () => {
+                toggleSidebarNew();
+                createNewList();
+            });
+        } else {
+            console.error('Element not found: createListSidebarBtn');
+        }
+        
+if (sidebarCloseBtn) {
             sidebarCloseBtn.addEventListener('click', toggleSidebar);
         } else {
             console.error('Element not found: sidebarCloseBtn');
+        }
+        
+        if (sidebarBackdrop) {
+            sidebarBackdrop.addEventListener('click', toggleSidebar);
+        } else {
+            console.error('Element not found: sidebarBackdrop');
         }
         
         if (createListSidebarBtn) {
@@ -683,6 +711,27 @@ function setupEventListeners() {
         console.log('Event listeners setup completed');
     } catch (error) {
         console.error('Error setting up event listeners:', error);
+    }
+}
+
+// Updated toggleSidebar function using classes
+function toggleSidebarNew() {
+    const isOpen = sidebar.classList.contains('open');
+    
+    if (isOpen) {
+        // Close sidebar
+        sidebar.classList.remove('open');
+        sidebarBackdrop.classList.remove('show');
+        mainContent.style.marginLeft = '0';
+        appBar.classList.remove('shifted');
+    } else {
+        // Open sidebar
+        sidebar.classList.add('open');
+        sidebarBackdrop.classList.add('show');
+        const sidebarWidth = window.innerWidth <= 480 ? '320px' : '300px';
+        mainContent.style.marginLeft = sidebarWidth;
+        appBar.classList.add('shifted');
+        populateSidebarLists(); // Populate lists when opening
     }
     // Add event delegation for sidebar list items after they are loaded
     try {
