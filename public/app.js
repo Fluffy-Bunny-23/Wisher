@@ -4179,6 +4179,20 @@ function setupShareButtons() {
             console.error('Element not found: emailCollabLink');
         }
         
+        const nativeShareViewer = document.getElementById('nativeShareViewer');
+        if (nativeShareViewer) {
+            nativeShareViewer.addEventListener('click', () => nativeShareList('viewer'));
+        } else {
+            console.error('Element not found: nativeShareViewer');
+        }
+        
+        const nativeShareCollab = document.getElementById('nativeShareCollab');
+        if (nativeShareCollab) {
+            nativeShareCollab.addEventListener('click', () => nativeShareList('collaborator'));
+        } else {
+            console.error('Element not found: nativeShareCollab');
+        }
+        
         console.log('Share buttons setup completed');
     } catch (error) {
         console.error('Error setting up share buttons:', error);
@@ -4492,6 +4506,56 @@ function generateShareUrl(type) {
     }
 }
 
+async function nativeShareList(type = 'viewer') {
+    try {
+        if (!currentListId) {
+            console.error('Cannot share: No list is currently loaded');
+            showToast('Cannot share: No list is currently loaded', 'error');
+            return;
+        }
+        
+        // Check if Web Share API is supported
+        if (!navigator.share) {
+            console.log('Web Share API not supported, falling back to copying link');
+            showToast('Share menu not supported on this device. Link copied to clipboard instead.', 'warning');
+            copyShareLink(type);
+            return;
+        }
+        
+        const shareUrl = generateShareUrl(type);
+        const listTitle = currentList?.name || 'Wishlist';
+        const accessType = type === 'collaborator' ? 'with edit access' : 'with view-only access';
+        const listDescription = currentList?.description || `Check out my wishlist ${accessType}!`;
+        
+        const shareData = {
+            title: listTitle,
+            text: listDescription,
+            url: shareUrl
+        };
+        
+        console.log(`Attempting to use native share API for ${type} role`);
+        await navigator.share(shareData);
+        console.log(`Successfully shared ${type} link using native share API`);
+        showToast('Shared successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error using native share:', error);
+        
+        // Handle different error cases
+        if (error.name === 'AbortError') {
+            console.log('Share was cancelled by user');
+            // Don't show toast for user cancellation
+        } else if (error.name === 'NotAllowedError') {
+            showToast('Share permission denied. Link copied to clipboard instead.', 'warning');
+            copyShareLink(type);
+        } else {
+            console.error('Unexpected error during share:', error);
+            showToast('Share failed. Link copied to clipboard instead.', 'warning');
+            copyShareLink(type);
+        }
+    }
+}
+
 function generateQRCode(type) {
     try {
         if (!currentListId || !currentList) {
@@ -4510,8 +4574,21 @@ function generateQRCode(type) {
         const qrDiv = document.getElementById('qrCanvas');
         const container = document.getElementById('qrCodeContainer');
         
-        // Clear any existing QR code
+        // Clear any existing QR code completely
         qrDiv.innerHTML = '';
+        // Remove any existing QR code elements that might have been added by the library
+        while (qrDiv.firstChild) {
+            qrDiv.removeChild(qrDiv.firstChild);
+        }
+        
+        // Also remove any fallback element that might exist
+        const fallbackElement = document.getElementById('qrFallback');
+        if (fallbackElement) {
+            fallbackElement.remove();
+        }
+        
+        // Reset canvas display
+        qrDiv.style.display = 'block';
         
         // Check if QRCode library is available
         console.log('typeof QRCode:', typeof QRCode);
@@ -5331,93 +5408,6 @@ function generateShareUrl(type) {
     }
 }
 
-function generateQRCode(type) {
-    try {
-        if (!currentListId || !currentList) {
-            console.error('Cannot generate QR code: No list is currently loaded');
-            showToast('Cannot generate QR code: No list is currently loaded', 'error');
-            return;
-        }
-        
-        const url = generateShareUrl(type);
-        if (!url) {
-            console.error('Failed to generate share URL for QR code');
-            showToast('Error generating QR code', 'error');
-            return;
-        }
-        
-        const canvas = document.getElementById('qrCanvas');
-        const container = document.getElementById('qrCodeContainer');
-        
-        // Check if QRCode library is available
-        if (typeof QRCode !== 'undefined') {
-            try {
-                 new QRCode(canvas, {
-                     text: url,
-                     width: 200,
-                     height: 200,
-                     colorDark : "#000000",
-                     colorLight : "#ffffff",
-                     correctLevel : QRCode.CorrectLevel.H
-                 });
-                 container.classList.remove('hidden');
-                 console.log(`QR code generated for type: ${type}`);
-             } catch (error) {
-                 console.error("Error generating QR code:", error);
-                 showFallbackQRCode(url, container, canvas);
-             }
-        } else {
-            showFallbackQRCode(url, container, canvas);
-        }
-    } catch (error) {
-        console.error('QR Code generation error:', error);
-        showToast('Error generating QR code', 'error');
-    }
-}
-
-function showFallbackQRCode(url, container, canvas) {
-    try {
-        console.log('Using fallback QR code display');
-        
-        // Validate inputs
-        if (!url) {
-            console.error('No URL provided for fallback QR code');
-            return;
-        }
-        
-        if (!container || !canvas) {
-            console.error('Missing container or canvas element for fallback QR code');
-            return;
-        }
-        
-        // Hide the canvas
-        canvas.style.display = 'none';
-        
-        // Create a fallback element if it doesn't exist
-        let fallbackElement = document.getElementById('qrFallback');
-        if (!fallbackElement) {
-            fallbackElement = document.createElement('div');
-            fallbackElement.id = 'qrFallback';
-            fallbackElement.className = 'qr-fallback';
-            container.appendChild(fallbackElement);
-        }
-        
-        // Show the URL as text
-        fallbackElement.innerHTML = `
-            <p>QR Code generation is unavailable.</p>
-            <p>Share this URL instead:</p>
-            <div class="share-url">${escapeHtml(url)}</div>
-            <button class="btn btn-primary" onclick="copyToClipboard('${url.replace(/'/g, "\\'")}')">Copy URL</button>
-        `;
-        
-        // Show the container
-        container.classList.remove('hidden');
-        console.log('Fallback QR code display completed');
-    } catch (error) {
-        console.error('Error showing fallback QR code:', error);
-        showToast('Error displaying share information', 'error');
-    }
-}
 
 function emailShareLink(type) {
     try {
@@ -6003,93 +5993,6 @@ function generateShareUrl(type) {
     }
 }
 
-function generateQRCode(type) {
-    try {
-        if (!currentListId || !currentList) {
-            console.error('Cannot generate QR code: No list is currently loaded');
-            showToast('Cannot generate QR code: No list is currently loaded', 'error');
-            return;
-        }
-        
-        const url = generateShareUrl(type);
-        if (!url) {
-            console.error('Failed to generate share URL for QR code');
-            showToast('Error generating QR code', 'error');
-            return;
-        }
-        
-        const canvas = document.getElementById('qrCanvas');
-        const container = document.getElementById('qrCodeContainer');
-        
-        // Check if QRCode library is available
-        if (typeof QRCode !== 'undefined') {
-            try {
-                 new QRCode(canvas, {
-                     text: url,
-                     width: 200,
-                     height: 200,
-                     colorDark : "#000000",
-                     colorLight : "#ffffff",
-                     correctLevel : QRCode.CorrectLevel.H
-                 });
-                 container.classList.remove('hidden');
-                 console.log(`QR code generated for type: ${type}`);
-             } catch (error) {
-                 console.error("Error generating QR code:", error);
-                 showFallbackQRCode(url, container, canvas);
-             }
-        } else {
-            showFallbackQRCode(url, container, canvas);
-        }
-    } catch (error) {
-        console.error('QR Code generation error:', error);
-        showToast('Error generating QR code', 'error');
-    }
-}
-
-function showFallbackQRCode(url, container, canvas) {
-    try {
-        console.log('Using fallback QR code display');
-        
-        // Validate inputs
-        if (!url) {
-            console.error('No URL provided for fallback QR code');
-            return;
-        }
-        
-        if (!container || !canvas) {
-            console.error('Missing container or canvas element for fallback QR code');
-            return;
-        }
-        
-        // Hide the canvas
-        canvas.style.display = 'none';
-        
-        // Create a fallback element if it doesn't exist
-        let fallbackElement = document.getElementById('qrFallback');
-        if (!fallbackElement) {
-            fallbackElement = document.createElement('div');
-            fallbackElement.id = 'qrFallback';
-            fallbackElement.className = 'qr-fallback';
-            container.appendChild(fallbackElement);
-        }
-        
-        // Show the URL as text
-        fallbackElement.innerHTML = `
-            <p>QR Code generation is unavailable.</p>
-            <p>Share this URL instead:</p>
-            <div class="share-url">${escapeHtml(url)}</div>
-            <button class="btn btn-primary" onclick="copyToClipboard('${url.replace(/'/g, "\\'")}')">Copy URL</button>
-        `;
-        
-        // Show the container
-        container.classList.remove('hidden');
-        console.log('Fallback QR code display completed');
-    } catch (error) {
-        console.error('Error showing fallback QR code:', error);
-        showToast('Error displaying share information', 'error');
-    }
-}
 
 function emailShareLink(type) {
     try {

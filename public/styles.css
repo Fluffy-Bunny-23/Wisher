@@ -1255,6 +1255,10 @@ input:checked + .slider:before {
 .qr-container {
   text-align: center;
   margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 #qrCanvas {
@@ -1263,6 +1267,13 @@ input:checked + .slider:before {
   display: inline-block;
   padding: 16px;
   background: white;
+  margin: 0 auto;
+}
+
+#qrCanvas img,
+#qrCanvas canvas {
+  display: block;
+  margin: 0 auto;
 }
 
 .qr-fallback {
