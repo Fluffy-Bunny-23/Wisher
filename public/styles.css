@@ -477,6 +477,28 @@ p {
   display: flex;
   gap: 12px;
   flex-shrink: 0;
+  align-items: stretch;
+}
+
+.wishlist-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: auto;
+  min-height: 36px;
+  line-height: 1;
+}
+
+#importListBtn {
+  height: auto !important;
+  min-height: 36px !important;
+  line-height: 1 !important;
+  vertical-align: top !important;
+  margin: 0 !important;
+  padding: 8px 16px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 .list-controls {
