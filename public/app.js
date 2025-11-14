@@ -1413,14 +1413,60 @@ async function loadListItems(listId) {
         const items = [];
         const groups = {};
         
+        // Check for existing notes and prompt for deletion
+        const itemsWithNotes = [];
         itemsSnapshot.forEach(doc => {
             const itemData = doc.data();
             // Ensure comments array exists
             if (!itemData.comments) {
                 itemData.comments = [];
             }
+            
+            // Check if item has notes
+            if (itemData.notes && itemData.notes.trim() !== '') {
+                itemsWithNotes.push({ id: doc.id, name: itemData.name, notes: itemData.notes });
+            }
+            
             items.push({ id: doc.id, ...itemData });
         });
+        
+        // If there are items with notes, prompt for deletion
+        if (itemsWithNotes.length > 0) {
+            const shouldDeleteNotes = confirm(
+                `Found ${itemsWithNotes.length} item(s) with secondary descriptions (notes). ` +
+                `These will be removed from the application. ` +
+                `Would you like to delete these notes now?\n\n` +
+                `Items with notes:\n` +
+                itemsWithNotes.map(item => `• ${item.name}`).join('\n')
+            );
+            
+            if (shouldDeleteNotes) {
+                // Delete notes from all items in database
+                const batch = db.batch();
+                itemsWithNotes.forEach(item => {
+                    const itemRef = db.collection('lists').doc(listId).collection('items').doc(item.id);
+                    batch.update(itemRef, { notes: firebase.firestore.FieldValue.delete() });
+                });
+                
+                try {
+                    await batch.commit();
+                    console.log(`Deleted notes from ${itemsWithNotes.length} items`);
+                    showToast(`Removed secondary descriptions from ${itemsWithNotes.length} item(s)`, 'success');
+                    
+                    // Update local items to reflect notes deletion
+                    items.forEach(item => {
+                        if (item.notes) {
+                            delete item.notes;
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error deleting notes:', error);
+                    showToast('Error removing secondary descriptions', 'error');
+                }
+            } else {
+                console.log('User chose not to delete existing notes');
+            }
+        }
         
         groupsSnapshot.forEach(doc => {
             groups[doc.id] = { id: doc.id, ...doc.data() };
@@ -1959,7 +2005,7 @@ function applySearchAndFilters() {
     // Apply search query
     if (searchQuery) {
         filteredItems = filteredItems.filter(item => {
-            const searchText = `${item.name} ${item.description || ''} ${item.notes || ''}`.toLowerCase();
+            const searchText = `${item.name} ${item.description || ''}`.toLowerCase();
             return searchText.includes(searchQuery);
         });
     }
@@ -2315,9 +2361,7 @@ function createItemCard(item, position) {
                 ${item.description ? `
                     <p class="item-description">${escapeHtml(item.description)}</p>
                 ` : ''}
-                ${item.notes ? `
-                    <div class="item-notes">${marked.parse(item.notes)}</div>
-                ` : ''}
+
                 <div class="item-meta">
                     ${item.price ? `<span class="item-price">$${item.price}</span>` : ''}
                     ${item.bought && item.buyerName ? `
@@ -2438,7 +2482,7 @@ function editGroup(groupId) {
             document.getElementById('groupName').value = group.name || '';
             document.getElementById('groupImageURL').value = group.imageUrl || '';
             document.getElementById('groupDescription').value = group.description || '';
-            document.getElementById('groupNotes').value = group.notes || '';
+
             document.getElementById('groupAutoBuy').checked = !!group.autoBuy;
             document.getElementById('groupConditionalVisibility').checked = !!group.conditionalVisibility;
 
@@ -3178,9 +3222,9 @@ function showAddItemModal() {
     document.getElementById('itemForm').reset();
     document.getElementById('itemForm').dataset.mode = 'add';
     
-    // Clear description and notes fields
+    // Clear description field
+    document.getElementById('itemName').value = '';
     document.getElementById('itemDescription').value = '';
-    document.getElementById('itemNotes').value = '';
 
     // Populate group selector
     populateGroupSelector();
@@ -3251,13 +3295,10 @@ function showAddItemModal() {
             const itemName = itemNameInput.value.trim();
             if (itemName) {
                 showLoading();
-                const { generatedName, description, notes } = await summarizeItemName(itemName);
-                // Only update if AI returns a valid generated name
-                if (generatedName && generatedName.trim()) {
-                    document.getElementById('itemName').value = generatedName; // Update item name input
-                }
+                const { generatedName, description } = await summarizeItemName(itemName);
+                
+                document.getElementById('itemName').value = generatedName;
                 document.getElementById('itemDescription').value = description;
-                document.getElementById('itemNotes').value = notes;
                 hideLoading();
             }
         }, doneTypingInterval);
@@ -3385,7 +3426,7 @@ async function saveGroup() {
     const name = document.getElementById('groupName').value.trim();
     const imageUrl = document.getElementById('groupImageURL').value.trim();
     const description = document.getElementById('groupDescription').value.trim();
-    const notes = document.getElementById('groupNotes').value.trim();
+
     const conditional = document.getElementById('groupConditionalVisibility').checked;
     const triggerItemId = document.getElementById('groupTriggerItem').value || null;
     const autoBuy = document.getElementById('groupAutoBuy').checked;
@@ -3405,7 +3446,7 @@ async function saveGroup() {
             name,
             imageUrl: imageUrl || null,
             description: description || null,
-            notes: notes || null,
+
             conditionalVisibility: conditional || false,
             triggerItemId: conditional ? triggerItemId : null,
             autoBuy: autoBuy || false,
@@ -3469,7 +3510,7 @@ function editItem(itemId) {
                 document.getElementById('itemURL').value = item.url || '';
                 document.getElementById('itemDescription').value = item.description || '';
                 document.getElementById('itemImageURL').value = item.imageUrl || '';
-                document.getElementById('itemNotes').value = item.notes || '';
+
                 document.getElementById('itemPrice').value = item.price || '';
                 document.getElementById('itemPosition').value = item.position || '';
                 
@@ -4336,7 +4377,7 @@ async function saveItem() {
         url: validatedUrl,
         description: document.getElementById('itemDescription').value,
         imageUrl: document.getElementById('itemImageURL').value,
-        notes: document.getElementById('itemNotes').value,
+
         price: document.getElementById('itemPrice').value || null,
         position: desiredPosition,
         bought: false,
@@ -4552,24 +4593,22 @@ async function summarizeItemName(itemName, apiKey) {
     const keyToUse = apiKey || geminiApiKey;
     if (!keyToUse) {
         console.warn('Gemini API Key not set. Cannot generate item details.');
-        return { description: "", notes: "" };
+        return { description: "" };
     }
 
     try {
         console.log(`Generating details for item: ${itemName} using Gemini API`);
 
-        const PROMPT = `Generate info for the following item. Make a name that is just a few words. make the description a short 1 or less sentance about twhat the product is. make the notes some of the features or other models that are cheaper, etc. Use the provided example as a reference for style and content structure. Ensure notes are in Markdown format for links.
+        const PROMPT = `Generate info for the following item. Make a name that is just a few words. make the description a short 1 or less sentence about what the product is. Use the provided example as a reference for style and content structure.
 
 Example:
 Item Name: Insta360 X5
 Description: The newest 360 Camera from Insta 360. Similar to GoPro, but records all angles.
-Notes: The [Insta360 X4](https://share.google/hzIG76Kf5MtnCNikb) is a cheaper alternative.
 
 Generate for:
 Item Name: "${itemName}"
 Item Name:
-Description:
-Notes:`;
+Description:`;
 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${keyToUse}`;
 
@@ -4594,20 +4633,18 @@ Notes:`;
         const data = await response.json();
         const generatedText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
-        // Parse the generated text into description and notes
+        // Parse the generated text into description
         const nameMatch = generatedText.match(/Item Name:\s*([\s\S]*?)(?:\nDescription:|$)/i);
-        const descriptionMatch = generatedText.match(/Description:\s*([\s\S]*?)(?:\nNotes:|$)/i);
-        const notesMatch = generatedText.match(/Notes:\s*([\s\S]*)/i);
+        const descriptionMatch = generatedText.match(/Description:\s*([\s\S]*)/i);
 
         const generatedName = nameMatch ? nameMatch[1].trim() : "Ai Did not provide a name"; // Fallback to original itemName if AI doesn't provide a name
         const description = descriptionMatch ? descriptionMatch[1].trim() : "";
-        const notes = notesMatch ? notesMatch[1].trim() : "";
 
-        return { generatedName, description, notes };
+        return { generatedName, description };
 
     } catch (error) {
         console.error(`Error generating details for ${itemName} with Gemini API:`, error);
-        return { description: "", notes: "" }; // Return empty details on error
+        return { description: "" }; // Return empty details on error
     }
 }
 
@@ -4686,7 +4723,6 @@ function showInfoModal(item) {
     document.getElementById('infoItemName').textContent = item.name;
     document.getElementById('infoItemDescription').textContent = item.description || 'No description';
     document.getElementById('infoItemPrice').textContent = item.price ? `$${item.price}` : 'No price';
-    document.getElementById('infoItemNotes').textContent = item.notes || 'No notes';
     
     // Set up the link button if a URL exists
     const linkBtn = document.getElementById('infoItemLink');
@@ -5486,7 +5522,7 @@ function showInfoModal(item) {
     document.getElementById('infoItemName').textContent = item.name;
     document.getElementById('infoItemDescription').textContent = item.description || 'No description';
     document.getElementById('infoItemPrice').textContent = item.price ? `$${item.price}` : 'No price';
-    document.getElementById('infoItemNotes').textContent = item.notes || 'No notes';
+
     
     // Set up the link button if a URL exists
     const linkBtn = document.getElementById('infoItemLink');
@@ -5784,13 +5820,11 @@ async function importList() {
 
                         let generatedName = itemData.name || 'Untitled Item';
                         let description = itemData.description || '';
-                        let notes = itemData.notes || '';
-
+                        
                         if (useAiSummarization && importGeminiApiKey) {
                             const aiDetails = await summarizeItemName(itemData.name || 'Untitled Item', importGeminiApiKey);
                             generatedName = aiDetails.generatedName || generatedName;
                             description = aiDetails.description || description;
-                            notes = aiDetails.notes || notes;
                         }
 
                         const newItem = {
@@ -5798,7 +5832,6 @@ async function importList() {
                             url: itemData.link || '',
                             description: description,
                             imageUrl: itemData.imageUrl || '',
-                            notes: notes,
                             price: itemData.price || null,
                             position: currentSize + i + 1, // More efficient position calculation
                             bought: false,
@@ -6230,7 +6263,7 @@ function showInfoModal(item) {
     document.getElementById('infoItemName').textContent = item.name;
     document.getElementById('infoItemDescription').textContent = item.description || 'No description';
     document.getElementById('infoItemPrice').textContent = item.price ? `$${item.price}` : 'No price';
-    document.getElementById('infoItemNotes').textContent = item.notes || 'No notes';
+
     
     // Set up the link button if a URL exists
     const linkBtn = document.getElementById('infoItemLink');

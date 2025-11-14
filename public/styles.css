@@ -1773,13 +1773,7 @@ input:checked + .slider:before {
   margin-bottom: 8px;
 }
 
-.item-notes {
-  background-color: var(--background-color);
-  padding: 12px;
-  border-radius: var(--border-radius);
-  margin-bottom: 8px;
-  font-size: 0.875rem;
-}
+
 
 .item-meta {
   display: flex;
@@ -2352,12 +2346,7 @@ input:checked + .slider:before {
   margin-bottom: 8px;
 }
 
-.info-item-notes {
-  background-color: var(--background-color);
-  padding: 16px;
-  border-radius: var(--border-radius);
-  margin-bottom: 16px;
-}
+
 
 .info-item-actions {
   display: flex;
