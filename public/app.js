@@ -12,6 +12,16 @@ let currentSortMethod = 'creators'; // Default sort method
 let showExtensiveMovingButtons = false; // Toggle for extensive moving buttons
 let currentTheme = localStorage.getItem('theme') || 'light'; // Theme state
 
+// Search and filter state
+let searchQuery = '';
+let activeFilters = {
+    minPrice: null,
+    maxPrice: null,
+    showAvailable: true,
+    showBought: false
+};
+let allItems = []; // Store all items for filtering
+
 // DOM elements
 const authScreen = document.getElementById('authScreen');
 const listScreen = document.getElementById('listScreen');
@@ -664,6 +674,87 @@ function setupEventListeners() {
             console.error('Element not found: sortSelect');
         }
         
+        // Search and filter controls
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', handleSearchInput);
+        } else {
+            console.error('Element not found: searchInput');
+        }
+        
+        const searchClearBtn = document.getElementById('searchClearBtn');
+        if (searchClearBtn) {
+            searchClearBtn.addEventListener('click', clearSearch);
+        } else {
+            console.error('Element not found: searchClearBtn');
+        }
+        
+        const filterToggleBtn = document.getElementById('filterToggleBtn');
+        if (filterToggleBtn) {
+            filterToggleBtn.addEventListener('click', toggleFilterPanel);
+        } else {
+            console.error('Element not found: filterToggleBtn');
+        }
+        
+        const filterBackdrop = document.getElementById('filterBackdrop');
+        if (filterBackdrop) {
+            filterBackdrop.addEventListener('click', () => {
+                const filterPanel = document.getElementById('filterPanel');
+                filterPanel.classList.add('hidden');
+                filterBackdrop.classList.remove('show');
+            });
+        } else {
+            console.error('Element not found: filterBackdrop');
+        }
+        
+        const filterCloseBtn = document.getElementById('filterCloseBtn');
+        if (filterCloseBtn) {
+            filterCloseBtn.addEventListener('click', () => {
+                const filterPanel = document.getElementById('filterPanel');
+                const filterBackdrop = document.getElementById('filterBackdrop');
+                filterPanel.classList.add('hidden');
+                filterBackdrop.classList.remove('show');
+            });
+        } else {
+            console.error('Element not found: filterCloseBtn');
+        }
+        
+        const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+        if (applyFiltersBtn) {
+            applyFiltersBtn.addEventListener('click', applyFilters);
+        } else {
+            console.error('Element not found: applyFiltersBtn');
+        }
+        
+        const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+        if (clearFiltersBtn) {
+            clearFiltersBtn.addEventListener('click', clearAllFilters);
+        } else {
+            console.error('Element not found: clearFiltersBtn');
+        }
+        
+
+        
+        // Price range inputs
+        const minPriceInput = document.getElementById('minPriceInput');
+        const maxPriceInput = document.getElementById('maxPriceInput');
+        if (minPriceInput) {
+            minPriceInput.addEventListener('input', handlePriceInput);
+        }
+        if (maxPriceInput) {
+            maxPriceInput.addEventListener('input', handlePriceInput);
+        }
+        
+        // Purchase status checkboxes
+        const filterAvailable = document.getElementById('filterAvailable');
+        const filterBought = document.getElementById('filterBought');
+        if (filterAvailable) {
+            filterAvailable.addEventListener('change', handleStatusFilter);
+        }
+        if (filterBought) {
+            filterBought.addEventListener('change', handleStatusFilter);
+        }
+        
 
         
         // Share buttons
@@ -1242,9 +1333,14 @@ async function loadListItems(listId) {
         
         console.log(`Loaded ${items.length} items and ${Object.keys(groups).length} groups for list ${listId}`);
         
-        // Apply sorting to items
-        const sortedItems = sortItems(items, groups);
-        displayItems(sortedItems, groups);
+        // Store all items for filtering
+        allItems = items;
+        
+
+        
+        // Apply search and filters
+        applySearchAndFilters();
+        
         setupDragAndDrop();
         clearTimeout(safetyTimeout);
     } catch (error) {
@@ -1688,6 +1784,138 @@ function handleSortChange() {
     
     // Reload and re-sort items
     loadListItems(currentListId);
+}
+
+// Search and filter functions
+function handleSearchInput(e) {
+    searchQuery = e.target.value.toLowerCase().trim();
+    const clearBtn = document.getElementById('searchClearBtn');
+    clearBtn.style.display = searchQuery ? 'flex' : 'none';
+    applySearchAndFilters();
+}
+
+function clearSearch() {
+    searchQuery = '';
+    document.getElementById('searchInput').value = '';
+    document.getElementById('searchClearBtn').style.display = 'none';
+    applySearchAndFilters();
+}
+
+function toggleFilterPanel() {
+    const filterPanel = document.getElementById('filterPanel');
+    const filterBackdrop = document.getElementById('filterBackdrop');
+    
+    if (filterPanel.classList.contains('hidden')) {
+        filterPanel.classList.remove('hidden');
+        filterBackdrop.classList.add('show');
+    } else {
+        filterPanel.classList.add('hidden');
+        filterBackdrop.classList.remove('show');
+    }
+}
+
+function handlePriceInput() {
+    const minPrice = document.getElementById('minPriceInput').value;
+    const maxPrice = document.getElementById('maxPriceInput').value;
+    
+    activeFilters.minPrice = minPrice ? parseFloat(minPrice) : null;
+    activeFilters.maxPrice = maxPrice ? parseFloat(maxPrice) : null;
+}
+
+function handleStatusFilter() {
+    activeFilters.showAvailable = document.getElementById('filterAvailable').checked;
+    activeFilters.showBought = document.getElementById('filterBought').checked;
+}
+
+function applyFilters() {
+    handlePriceInput();
+    handleStatusFilter();
+    
+    updateActiveFiltersCount();
+    applySearchAndFilters();
+    toggleFilterPanel(); // Close filter panel after applying
+}
+
+function clearAllFilters() {
+    // Reset filter state
+    activeFilters = {
+        minPrice: null,
+        maxPrice: null,
+        showAvailable: true,
+        showBought: false,
+        categories: []
+    };
+    
+    // Reset UI
+    document.getElementById('minPriceInput').value = '';
+    document.getElementById('maxPriceInput').value = '';
+    document.getElementById('filterAvailable').checked = true;
+    document.getElementById('filterBought').checked = false;
+    
+    // Clear category checkboxes
+    const categoryCheckboxes = document.querySelectorAll('#categoryFilters input[type="checkbox"]');
+    categoryCheckboxes.forEach(cb => cb.checked = false);
+    
+    updateActiveFiltersCount();
+    applySearchAndFilters();
+}
+
+function updateActiveFiltersCount() {
+    let count = 0;
+    if (activeFilters.minPrice !== null) count++;
+    if (activeFilters.maxPrice !== null) count++;
+    if (!activeFilters.showAvailable) count++;
+    if (activeFilters.showBought) count++;
+    
+    const countElement = document.getElementById('activeFiltersCount');
+    if (count > 0) {
+        countElement.textContent = count;
+        countElement.classList.remove('hidden');
+    } else {
+        countElement.classList.add('hidden');
+    }
+}
+
+function applySearchAndFilters() {
+    if (!allItems || allItems.length === 0) return;
+    
+    let filteredItems = [...allItems];
+    
+    // Apply search query
+    if (searchQuery) {
+        filteredItems = filteredItems.filter(item => {
+            const searchText = `${item.name} ${item.description || ''} ${item.notes || ''}`.toLowerCase();
+            return searchText.includes(searchQuery);
+        });
+    }
+    
+    // Apply price filter
+    if (activeFilters.minPrice !== null) {
+        filteredItems = filteredItems.filter(item => {
+            const price = parseFloat(item.price) || 0;
+            return price >= activeFilters.minPrice;
+        });
+    }
+    
+    if (activeFilters.maxPrice !== null) {
+        filteredItems = filteredItems.filter(item => {
+            const price = parseFloat(item.price) || 0;
+            return price <= activeFilters.maxPrice;
+        });
+    }
+    
+    // Apply purchase status filter
+    filteredItems = filteredItems.filter(item => {
+        if (item.bought && activeFilters.showBought) return true;
+        if (!item.bought && activeFilters.showAvailable) return true;
+        return false;
+    });
+    
+
+    
+    // Apply sorting and display
+    const sortedItems = sortItems(filteredItems, {});
+    displayItems(sortedItems, {});
 }
 
 function sortItems(items, groups = {}) {

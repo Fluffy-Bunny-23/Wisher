@@ -114,6 +114,63 @@
                     <h2 id="listTitle">Loading...</h2>
                     <p id="listEventDate"></p>
                     <div class="list-controls">
+                        <div class="search-filter-controls">
+                            <div class="search-container">
+                                <div class="search-input-wrapper">
+                                    <input type="text" id="searchInput" placeholder="Search items, descriptions, and notes..." class="search-input">
+                                    <button class="icon-button search-clear-btn" id="searchClearBtn" title="Clear search">
+                                        <span class="material-icons">clear</span>
+                                    </button>
+                                </div>
+                                <button class="btn btn-secondary filter-toggle-btn" id="filterToggleBtn">
+                                    <span class="material-icons">filter_list</span>
+                                    Filters
+                                    <span id="activeFiltersCount" class="filter-count hidden">0</span>
+                                </button>
+                            </div>
+                            
+                            <div id="filterPanel" class="filter-panel hidden">
+                                <div class="filter-panel-header">
+                                    <h3>Filters</h3>
+                                    <button class="icon-button filter-close-btn" id="filterCloseBtn">
+                                        <span class="material-icons">close</span>
+                                    </button>
+                                </div>
+                                
+                                <div class="filter-panel-body">
+                                    <div class="filter-section">
+                                        <h4>Price Range</h4>
+                                        <div class="price-range-inputs">
+                                            <input type="number" id="minPriceInput" placeholder="Min" class="price-input">
+                                            <span>-</span>
+                                            <input type="number" id="maxPriceInput" placeholder="Max" class="price-input">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="filter-section">
+                                        <h4>Purchase Status</h4>
+                                        <div class="checkbox-group">
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" id="filterAvailable" checked>
+                                                <span class="checkmark"></span>
+                                                Available
+                                            </label>
+                                            <label class="checkbox-label">
+                                                <input type="checkbox" id="filterBought">
+                                                <span class="checkmark"></span>
+                                                Bought
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="filter-actions">
+                                        <button class="btn btn-text" id="clearFiltersBtn">Clear All</button>
+                                        <button class="btn btn-primary" id="applyFiltersBtn">Apply Filters</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div class="sort-controls">
                             <label for="sortSelect">Sort by:</label>
                             <select id="sortSelect" class="sort-select">
@@ -656,6 +713,9 @@
         <div class="spinner"></div>
     </div>
 
+    <!-- Filter Panel Backdrop -->
+    <div id="filterBackdrop" class="filter-backdrop hidden"></div>
+    
     <!-- Toast Notifications -->
     <div id="toastContainer" class="toast-container"></div>
 
