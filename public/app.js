@@ -5,7 +5,7 @@ let currentListId = null;
 let currentListRole = null; // Global variable to store role from URL
 let showBoughtItems = false;
 let showAsViewer = false; // New global variable for viewer mode
-let geminiApiKey = localStorage.getItem('geminiApiKey') || '';
+let geminiApiKey = '';
 let selectedItems = [];
 let lastSelectedItemId = null;
 let currentSortMethod = 'creators'; // Default sort method
@@ -4398,18 +4398,58 @@ async function updateItemPosition(itemId, newPosition) {
 }
 
 // Settings functions
-function saveSettings() {
-    // Gemini API Key is now stored per list, so no global saving here
-    showToast('Settings saved!', 'success');
-    hideModal('settingsModal');
+async function saveSettings() {
+    if (!currentUser || !currentList || currentUser.email !== currentList.owner) {
+        showToast('Only list owners can save settings', 'error');
+        return;
+    }
+    
+    try {
+        const apiKeyInput = document.getElementById('geminiApiKey');
+        const newApiKey = apiKeyInput ? apiKeyInput.value.trim() : '';
+        
+        // Update the list with the new API key
+        await db.collection('lists').doc(currentListId).update({
+            geminiApiKey: newApiKey,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Update the global variable and current list object
+        geminiApiKey = newApiKey;
+        currentList.geminiApiKey = newApiKey;
+        
+        showToast('Settings saved!', 'success');
+        hideModal('settingsModal');
+    } catch (error) {
+        console.error('Error saving settings:', error);
+        showToast('Error saving settings: ' + error.message, 'error');
+    }
 }
 
 // Function to load settings on app initialization
 function loadSettings() {
-    // Gemini API Key is loaded from the current list, not global settings
+    // Only show API key field for list owners
+    if (!currentUser || !currentList || currentUser.email !== currentList.owner) {
+        // Hide the API key section for non-owners
+        const apiKeySection = document.querySelector('#settingsModal .settings-section');
+        if (apiKeySection) {
+            const h4Element = apiKeySection.querySelector('h4');
+            if (h4Element && h4Element.textContent && h4Element.textContent.includes('Gemini AI Integration')) {
+                apiKeySection.style.display = 'none';
+            }
+        }
+        return;
+    }
+    
+    // Show API key section for owners and load current value
+    const apiKeySection = document.querySelector('#settingsModal .settings-section');
+    if (apiKeySection) {
+        apiKeySection.style.display = 'block';
+    }
+    
     const apiKeyInput = document.getElementById('geminiApiKey');
     if (apiKeyInput) {
-        apiKeyInput.value = geminiApiKey; // Use the globally set geminiApiKey (from current list)
+        apiKeyInput.value = geminiApiKey || ''; // Use globally set geminiApiKey (from current list)
     }
 }
 
@@ -4509,7 +4549,7 @@ async function performItemSummarization(itemId, itemName, apiKey) {
 
 // Initialize Gemini API
 async function summarizeItemName(itemName, apiKey) {
-    const keyToUse = apiKey || localStorage.getItem('geminiApiKey');
+    const keyToUse = apiKey || geminiApiKey;
     if (!keyToUse) {
         console.warn('Gemini API Key not set. Cannot generate item details.');
         return { description: "", notes: "" };
@@ -5680,8 +5720,8 @@ async function importList() {
     // Show the AI settings modal first
     showModal('importAiSettingsModal');
 
-    // Populate the API key field from localStorage if available
-    document.getElementById('importGeminiApiKey').value = localStorage.getItem('geminiApiKey') || '';
+    // Populate the API key field from current list if available
+    document.getElementById('importGeminiApiKey').value = geminiApiKey || '';
 
     // Handle the "Continue to Import" button click
     document.getElementById('confirmImportAiSettingsBtn').onclick = async () => {
@@ -5690,12 +5730,25 @@ async function importList() {
 
         const useAiSummarization = document.getElementById('useAiSummarization').checked;
         const importGeminiApiKey = document.getElementById('importGeminiApiKey').value.trim();
-        const saveGeminiApiKeyLocal = document.getElementById('saveGeminiApiKeyLocal').checked;
+        const saveGeminiApiKeyToList = document.getElementById('saveGeminiApiKeyLocal').checked;
 
-        if (saveGeminiApiKeyLocal) {
-            localStorage.setItem('geminiApiKey', importGeminiApiKey);
-        } else {
-            localStorage.removeItem('geminiApiKey');
+        // Save API key to current list if user is owner and chose to save it
+        if (saveGeminiApiKeyToList && currentUser && currentList && currentUser.email === currentList.owner) {
+            try {
+                await db.collection('lists').doc(currentListId).update({
+                    geminiApiKey: importGeminiApiKey,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Update the global variable and current list object
+                geminiApiKey = importGeminiApiKey;
+                currentList.geminiApiKey = importGeminiApiKey;
+                
+                console.log('API key saved to list');
+            } catch (error) {
+                console.error('Error saving API key to list:', error);
+                showToast('Error saving API key to list', 'error');
+            }
         }
 
         const fileInput = document.createElement('input');
