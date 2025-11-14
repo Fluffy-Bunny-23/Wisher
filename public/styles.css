@@ -270,6 +270,11 @@
   --md-sys-color-inverse-on-surface: #e1e2e6;
 }
 
+/* Dark mode app-bar override */
+[data-theme="dark"] .app-bar {
+  background-color: #1e1e1e !important;
+}
+
 /* Theme transition */
 * {
   transition: background-color 0.3s cubic-bezier(0.2, 0, 0, 1),
@@ -572,7 +577,7 @@ p {
 /* Material Design 3 App Bar */
 .app-bar {
     width: 100%;
-    background-color: var(--md-sys-color-surface-container);
+    background-color: #ffffff;
     color: var(--md-sys-color-on-surface);
     padding: 8px 16px;
     display: flex;
