@@ -1128,6 +1128,21 @@ p {
   margin: 0 !important;
   padding: 8px 16px !important;
   display: inline-flex !important;
+}
+
+#importListBtn[style*="display: none"] {
+  display: none !important;
+}
+
+#importListBtn.force-hidden {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  overflow: hidden !important;
+}
   align-items: center !important;
   justify-content: center !important;
 }

@@ -52,6 +52,88 @@ function hideSyncIndicator() {
     if (el) el.classList.add('hidden');
 }
 
+function enforceViewerPermissions() {
+    if (!currentUser || !currentList) {
+        console.log('Cannot enforce permissions: No user or list loaded');
+        return;
+    }
+    
+    // Determine user permissions
+    const isOwner = currentUser.email === currentList.owner;
+    const collaboratorsField = currentList.collaborators || [];
+    const isCollaborator = Array.isArray(collaboratorsField)
+        ? collaboratorsField.includes(currentUser.email)
+        : typeof collaboratorsField === 'object' && collaboratorsField !== null
+            ? Object.values(collaboratorsField).includes(currentUser.email)
+            : false;
+    const canEdit = isOwner || isCollaborator;
+    const effectiveCanEdit = canEdit && !showAsViewer;
+    
+    console.log('Enforcing permissions - isOwner:', isOwner, 'isCollaborator:', isCollaborator, 'showAsViewer:', showAsViewer, 'effectiveCanEdit:', effectiveCanEdit);
+    
+    // Force hide buttons from viewers
+    const addItemBtn = document.getElementById('addItemBtn');
+    const addGroupBtn = document.getElementById('addGroupBtn');
+    const manageListBtn = document.getElementById('manageListBtn');
+    const importListBtn = document.getElementById('importListBtn');
+    
+    if (addItemBtn) {
+        addItemBtn.style.display = effectiveCanEdit ? 'flex' : 'none';
+        console.log('addItemBtn display:', addItemBtn.style.display);
+    }
+    
+    if (addGroupBtn) {
+        addGroupBtn.style.display = effectiveCanEdit ? 'flex' : 'none';
+        console.log('addGroupBtn display:', addGroupBtn.style.display);
+    }
+    
+    if (manageListBtn) {
+        manageListBtn.style.display = (isOwner && !showAsViewer) ? 'flex' : 'none';
+        console.log('manageListBtn display:', manageListBtn.style.display);
+    }
+    
+    // Extra aggressive hiding for importListBtn due to CSS !important override
+    if (importListBtn) {
+        if (isOwner && !showAsViewer) {
+            // Show button
+            importListBtn.style.display = 'block';
+            importListBtn.style.visibility = 'visible';
+            importListBtn.style.opacity = '1';
+            importListBtn.style.height = 'auto';
+            importListBtn.style.width = 'auto';
+            importListBtn.style.pointerEvents = 'auto';
+            importListBtn.classList.remove('force-hidden');
+        } else {
+            // Hide button with multiple methods
+            importListBtn.style.display = 'none';
+            importListBtn.style.visibility = 'hidden';
+            importListBtn.style.opacity = '0';
+            importListBtn.style.height = '0';
+            importListBtn.style.width = '0';
+            importListBtn.style.pointerEvents = 'none';
+            importListBtn.classList.add('force-hidden');
+            
+            // Also try removing from DOM temporarily
+            setTimeout(() => {
+                if (importListBtn && importListBtn.parentNode && !isOwner) {
+                    const parent = importListBtn.parentNode;
+                    const nextSibling = importListBtn.nextSibling;
+                    parent.removeChild(importListBtn);
+                    // Re-add after a delay to maintain DOM structure
+                    setTimeout(() => {
+                        if (nextSibling) {
+                            parent.insertBefore(importListBtn, nextSibling);
+                        } else {
+                            parent.appendChild(importListBtn);
+                        }
+                    }, 50);
+                }
+            }, 100);
+        }
+        console.log('importListBtn display:', importListBtn.style.display, 'visibility:', importListBtn.style.visibility, 'classList:', importListBtn.className);
+    }
+}
+
 function showUserStatus() {
     if (!currentUser || !currentList) {
         console.log('User status: No user or list loaded');
@@ -1224,6 +1306,9 @@ async function loadList(listId) {
         // Show user status in console
         showUserStatus();
         
+        // Final permission check to ensure buttons are properly hidden for viewers
+        enforceViewerPermissions();
+        
         clearTimeout(safetyTimeout);
         hideLoading();
         console.log('List loaded successfully');
@@ -1239,25 +1324,7 @@ function displayList(list) {
     document.getElementById('listTitle').textContent = list.name;
     document.getElementById('listEventDate').textContent = list.eventDate ? `Event: ${formatDate(list.eventDate)}` : '';
     
-    // Set sort select to current sort method
-    const sortSelect = document.getElementById('sortSelect');
-    if (sortSelect) {
-        sortSelect.value = currentSortMethod;
-    } else {
-        console.log('Sort select not found during displayList');
-    }
-
-        // Show/hide import button based on ownership
-        const importListBtn = document.getElementById('importListBtn');
-        if (importListBtn) {
-            if (currentUser && list.owner === currentUser.email) {
-                importListBtn.style.display = 'block';
-            } else {
-                importListBtn.style.display = 'none';
-            }
-        }
-
-    // Set up permissions
+    // Determine user permissions and set viewer mode if needed
     const isOwner = currentUser && currentUser.email === list.owner;
     const collaboratorsField = list.collaborators || [];
     const isCollaborator = currentUser && (
@@ -1268,6 +1335,36 @@ function displayList(list) {
                 : false
     );
     const canEdit = isOwner || isCollaborator;
+    
+    // Auto-set viewer mode for actual viewers
+    if (!canEdit && currentUser) {
+        showAsViewer = true;
+        showBoughtItems = true;
+        const showAsViewerToggle = document.getElementById('showAsViewerToggle');
+        if (showAsViewerToggle) {
+            showAsViewerToggle.checked = true;
+        }
+    }
+    
+    // Set sort select to current sort method
+    const sortSelect = document.getElementById('sortSelect');
+    if (sortSelect) {
+        sortSelect.value = currentSortMethod;
+    } else {
+        console.log('Sort select not found during displayList');
+    }
+
+        // Show/hide import button based on ownership and viewer mode
+        const importListBtn = document.getElementById('importListBtn');
+        if (importListBtn) {
+            if (currentUser && list.owner === currentUser.email && !showAsViewer) {
+                importListBtn.style.display = 'block';
+            } else {
+                importListBtn.style.display = 'none';
+            }
+        }
+
+
 
     // Show/hide extensive moving toggle for owners/collaborators
     const extensiveMovingToggle = document.getElementById('extensiveMovingToggle');
@@ -1284,10 +1381,8 @@ function displayList(list) {
     // Hide edit controls when in viewer mode
     const effectiveCanEdit = canEdit && !showAsViewer;
     document.getElementById('addItemBtn').style.display = effectiveCanEdit ? 'flex' : 'none';
+    document.getElementById('addGroupBtn').style.display = effectiveCanEdit ? 'flex' : 'none';
     document.getElementById('manageListBtn').style.display = (isOwner && !showAsViewer) ? 'flex' : 'none';
-    if (importListBtn) {
-        importListBtn.style.display = (isOwner && !showAsViewer) ? 'block' : 'none';
-    }
 }
 
 async function loadListItems(listId) {
@@ -1379,26 +1474,6 @@ function displayItems(items, groups = {}) {
                 : false
     );
     const canEdit = isOwner || isCollaborator;
-    
-    // Auto-set viewer mode for actual viewers and hide toggle
-    const viewerModeToggle = document.getElementById('viewerModeToggle');
-    const showAsViewerToggle = document.getElementById('showAsViewerToggle');
-    const viewerModeContainer = viewerModeToggle ? viewerModeToggle.parentElement : null;
-    
-    if (!canEdit && currentUser) {
-        // This is a viewer - auto-enable viewer mode and hide toggle
-        showAsViewer = true;
-        showBoughtItems = true;
-        if (showAsViewerToggle) {
-            showAsViewerToggle.checked = true;
-        }
-        if (viewerModeContainer) {
-            viewerModeContainer.style.display = 'none';
-        }
-    } else if (canEdit && viewerModeContainer) {
-        // This is owner/collaborator - show the toggle
-        viewerModeContainer.style.display = 'flex';
-    }
 
     // Create selection action bar
     const selectionActionBar = document.createElement('div');
@@ -5105,6 +5180,8 @@ function toggleViewerMode() {
     }
     if (currentListId) {
         loadListItems(currentListId);
+        // Enforce permissions after toggling viewer mode
+        setTimeout(enforceViewerPermissions, 100); // Small delay to ensure DOM updates
     }
 }
 
