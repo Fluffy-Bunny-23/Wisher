@@ -1855,24 +1855,15 @@ function displayItems(items, groups = {}) {
         }
     });
 
-    // After rendering, persist the visible ordering back to the database so stored positions match display order.
-    // Only attempt to write if the current user can edit the list (owner or collaborator) AND we're in creators order mode.
-    // Don't persist when just sorting for viewing - only when actually reordering items.
-    try {
-        if (canEdit && db && currentListId && currentSortMethod === 'creators') {
-            // Persist DOM order including groups (handles empty groups now)
-            persistDomOrder(container).catch(err => console.error('Error persisting order to DB:', err));
-        }
-    } catch (err) {
-        console.error('Error during persistence step:', err);
-    }
+    // Note: Order persistence is now handled separately when items are actually reordered
+    // (via drag and drop or move operations), not when just displaying items
 }
 
 function handleSortChange() {
     const sortSelect = document.getElementById('sortSelect');
     currentSortMethod = sortSelect.value;
     
-    // Reload and re-sort items
+    // Reload and re-sort items (without persisting to database)
     loadListItems(currentListId);
 }
 
@@ -2147,8 +2138,8 @@ async function persistDomOrder(container) {
             await batch.commit();
         }
 
-        // Keep undo snapshot but do not show a popup; log to console instead
-        console.log('Order synced. Undo snapshot stored on `lastReorderSnapshot`. Call undoLastReorder() to revert.');
+        // Show undo popup with option to revert the order change
+        showUndoToast('Order updated successfully', undoLastReorder);
     } catch (err) {
         console.error('persistDomOrder error:', err);
         throw err;
@@ -3136,7 +3127,6 @@ function setupDragAndDrop() {
 
                 // Persist DOM order including groups (handles empty groups now)
                 await persistDomOrder(container);
-                showToast('Order updated', 'success');
             } catch (error) {
                 console.error('Error persisting order after drag:', error);
                 showToast('Error updating order: ' + (error.message || error), 'error');
