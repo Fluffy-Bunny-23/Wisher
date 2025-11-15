@@ -211,15 +211,16 @@ function showUndoToast(message, undoCallback) {
 function setupAuthStateListener() {
     console.log('Setting up auth state listener');
     
-    // Check if firebaseAuth is initialized
-    if (!firebaseAuth) {
+    // Check if firebaseAuth is initialized (with fallback to window.firebaseAuth)
+    const auth = firebaseAuth || window.firebaseAuth;
+    if (!auth) {
         console.error('Firebase Auth not initialized, cannot set up auth state listener');
         showToast('Authentication service not available. Please refresh the page.', 'error');
         return;
     }
     
     try {
-        const unsubscribe = firebaseAuth.onAuthStateChanged(user => {
+        const unsubscribe = auth.onAuthStateChanged(user => {
             console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
             if (user) {
                 console.log('User provider data:', user.providerData); // Add this line to inspect provider data
@@ -359,46 +360,6 @@ function updateThemeIcon() {
         if (icon) {
             icon.textContent = currentTheme === 'light' ? 'dark_mode' : 'light_mode';
         }
-    }
-}
-
-function setupAuthStateListener() {
-    console.log('Setting up auth state listener');
-    
-    // Check if firebaseAuth is initialized
-    if (!firebaseAuth) {
-        console.error('Firebase Auth not initialized, cannot set up auth state listener');
-        showToast('Authentication service not available. Please refresh the page.', 'error');
-        return;
-    }
-    
-    try {
-        const unsubscribe = firebaseAuth.onAuthStateChanged(user => {
-            console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
-            if (user) {
-                console.log('User provider data:', user.providerData); // Add this line to inspect provider data
-            }
-            if (user) {
-                console.log('User details:', user.email, user.uid, user.providerData);
-                currentUser = user;
-                onUserSignedIn();
-            } else {
-                console.log('No user signed in');
-                currentUser = null;
-                onUserSignedOut();
-            }
-        }, error => {
-            console.error('Auth state listener error:', error);
-            showToast('Authentication error: ' + error.message, 'error');
-        });
-        
-        console.log('Auth state listener set up successfully');
-        
-        // Store the unsubscribe function for potential cleanup
-        window.authUnsubscribe = unsubscribe;
-    } catch (error) {
-        console.error('Error setting up auth state listener:', error);
-        showToast('Failed to initialize authentication. Please refresh the page.', 'error');
     }
 }
 
@@ -1015,8 +976,9 @@ async function signInWithGoogle() {
         showLoading();
         console.log('Showing loading spinner');
         
-        // Check if firebaseAuth is initialized
-        if (!firebaseAuth) {
+        // Check if firebaseAuth is initialized (with fallback to window.firebaseAuth)
+        const auth = firebaseAuth || window.firebaseAuth;
+        if (!auth) {
             console.error('Firebase Auth not initialized');
             clearTimeout(safetyTimeout);
             hideLoading();
@@ -1024,8 +986,9 @@ async function signInWithGoogle() {
             return;
         }
         
-        // Check if googleProvider is initialized
-        if (!googleProvider) {
+        // Check if googleProvider is initialized (with fallback to window.googleProvider)
+        const provider = googleProvider || window.googleProvider;
+        if (!provider) {
             console.error('Google Auth Provider not initialized');
             clearTimeout(safetyTimeout);
             hideLoading();
@@ -1034,7 +997,7 @@ async function signInWithGoogle() {
         }
         
         console.log('Calling signInWithPopup with googleProvider');
-        const result = await firebaseAuth.signInWithPopup(googleProvider);
+        const result = await auth.signInWithPopup(provider);
         console.log('Sign in successful, result:', result);
         clearTimeout(safetyTimeout);
     } catch (error) {
@@ -1061,7 +1024,8 @@ async function signInWithEmail() {
     
     try {
         showLoading();
-        await firebaseAuth.signInWithEmailAndPassword(email, password);
+        const auth = firebaseAuth || window.firebaseAuth;
+        await auth.signInWithEmailAndPassword(email, password);
     } catch (error) {
         hideLoading();
         showToast('Error signing in: ' + error.message, 'error');
@@ -1084,7 +1048,8 @@ async function signUpWithEmail() {
     
     try {
         showLoading();
-        await firebaseAuth.createUserWithEmailAndPassword(email, password);
+        const auth = firebaseAuth || window.firebaseAuth;
+        await auth.createUserWithEmailAndPassword(email, password);
     } catch (error) {
         hideLoading();
         showToast('Error creating account: ' + error.message, 'error');
@@ -1093,7 +1058,8 @@ async function signUpWithEmail() {
 
 async function signOut() {
     try {
-        await firebaseAuth.signOut();
+        const auth = firebaseAuth || window.firebaseAuth;
+        await auth.signOut();
         showToast('Signed out successfully', 'success');
     } catch (error) {
         showToast('Error signing out: ' + error.message, 'error');
@@ -1118,8 +1084,9 @@ async function loadUserLists() {
     try {
         showLoading();
         
-        // Check if db is initialized
-        if (!db) {
+        // Check if db is initialized (with fallback to window.db or window.firebaseDb)
+        const database = db || window.db || window.firebaseDb;
+        if (!database) {
             console.error('Firestore database not initialized');
             clearTimeout(safetyTimeout);
             hideLoading();
@@ -1128,10 +1095,10 @@ async function loadUserLists() {
         }
         
         console.log('Querying Firestore for lists owned by:', currentUser.email);
-        const listsQuery = db.collection('lists')
+        const listsQuery = database.collection('lists')
             .where('owner', '==', currentUser.email);
         
-        const collaboratorQuery = db.collection('lists')
+        const collaboratorQuery = database.collection('lists')
             .where('collaborators', 'array-contains', currentUser.email);
         
         console.log('Fetching lists from Firestore...');
@@ -1251,8 +1218,9 @@ async function loadList(listId) {
     try {
         showLoading();
         
-        // Check if db is initialized
-        if (!db) {
+        // Check if db is initialized (with fallback to window.db or window.firebaseDb)
+        const database = db || window.db || window.firebaseDb;
+        if (!database) {
             console.error('Firestore database not initialized in loadList');
             clearTimeout(safetyTimeout);
             hideLoading();
@@ -1261,7 +1229,7 @@ async function loadList(listId) {
         }
         
         console.log('Loading list with ID:', listId);
-        const listDoc = await db.collection('lists').doc(listId).get();
+        const listDoc = await database.collection('lists').doc(listId).get();
         
         if (!listDoc.exists) {
             console.log('List not found:', listId);
@@ -1394,8 +1362,9 @@ async function loadListItems(listId) {
     }, 10000);
     
     try {
-        // Check if db is initialized
-        if (!db) {
+        // Check if db is initialized (with fallback to window.db or window.firebaseDb)
+        const database = db || window.db || window.firebaseDb;
+        if (!database) {
             console.error('Firestore database not initialized in loadListItems');
             clearTimeout(safetyTimeout);
             showToast('Database connection error. Please refresh the page.', 'error');
@@ -1406,8 +1375,8 @@ async function loadListItems(listId) {
         
         // Fetch both items and groups in parallel
         const [itemsSnapshot, groupsSnapshot] = await Promise.all([
-            db.collection('lists').doc(listId).collection('items').orderBy('position', 'asc').get(),
-            db.collection('lists').doc(listId).collection('groups').get()
+            database.collection('lists').doc(listId).collection('items').orderBy('position', 'asc').get(),
+            database.collection('lists').doc(listId).collection('groups').get()
         ]);
         
         const items = [];
