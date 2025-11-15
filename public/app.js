@@ -11,6 +11,8 @@ let lastSelectedItemId = null;
 let currentSortMethod = 'creators'; // Default sort method
 let showExtensiveMovingButtons = false; // Toggle for extensive moving buttons
 let currentTheme = localStorage.getItem('theme') || 'light'; // Theme state
+let userLists = [];
+let viewedListsGlobal = [];
 
 // Search and filter state
 let searchQuery = '';
@@ -131,6 +133,56 @@ function enforceViewerPermissions() {
             }, 100);
         }
         console.log('importListBtn display:', importListBtn.style.display, 'visibility:', importListBtn.style.visibility, 'classList:', importListBtn.className);
+    }
+    
+    // Hide toggle switches from viewers with aggressive methods
+    const extensiveMovingToggle = document.getElementById('extensiveMovingToggle');
+    const viewerModeToggle = document.getElementById('viewerModeToggle');
+    
+    if (extensiveMovingToggle) {
+        if (effectiveCanEdit) {
+            // Show toggles
+            extensiveMovingToggle.style.display = 'flex';
+            extensiveMovingToggle.style.visibility = 'visible';
+            extensiveMovingToggle.style.opacity = '1';
+            extensiveMovingToggle.style.height = 'auto';
+            extensiveMovingToggle.style.width = 'auto';
+            extensiveMovingToggle.style.pointerEvents = 'auto';
+            extensiveMovingToggle.classList.remove('force-hidden');
+        } else {
+            // Hide toggles with multiple methods
+            extensiveMovingToggle.style.display = 'none';
+            extensiveMovingToggle.style.visibility = 'hidden';
+            extensiveMovingToggle.style.opacity = '0';
+            extensiveMovingToggle.style.height = '0';
+            extensiveMovingToggle.style.width = '0';
+            extensiveMovingToggle.style.pointerEvents = 'none';
+            extensiveMovingToggle.classList.add('force-hidden');
+        }
+        console.log('extensiveMovingToggle display:', extensiveMovingToggle.style.display, 'visibility:', extensiveMovingToggle.style.visibility);
+    }
+    
+    if (viewerModeToggle) {
+        if (effectiveCanEdit) {
+            // Show toggles
+            viewerModeToggle.style.display = 'flex';
+            viewerModeToggle.style.visibility = 'visible';
+            viewerModeToggle.style.opacity = '1';
+            viewerModeToggle.style.height = 'auto';
+            viewerModeToggle.style.width = 'auto';
+            viewerModeToggle.style.pointerEvents = 'auto';
+            viewerModeToggle.classList.remove('force-hidden');
+        } else {
+            // Hide toggles with multiple methods
+            viewerModeToggle.style.display = 'none';
+            viewerModeToggle.style.visibility = 'hidden';
+            viewerModeToggle.style.opacity = '0';
+            viewerModeToggle.style.height = '0';
+            viewerModeToggle.style.width = '0';
+            viewerModeToggle.style.pointerEvents = 'none';
+            viewerModeToggle.classList.add('force-hidden');
+        }
+        console.log('viewerModeToggle display:', viewerModeToggle.style.display, 'visibility:', viewerModeToggle.style.visibility);
     }
 }
 
@@ -1125,7 +1177,12 @@ async function loadUserLists() {
         userLists = allLists;
         
         console.log('Total lists to display:', allLists.length);
-        displayLists(allLists);
+        
+        // Load viewed lists and combine with user lists
+        viewedListsGlobal = await loadViewedLists();
+        const allListsWithViewed = [...allLists, ...viewedListsGlobal];
+        
+        displayLists(allListsWithViewed);
         populateSidebarLists();
         hideLoading();
     } catch (error) {
@@ -1149,25 +1206,71 @@ function displayLists(lists) {
         return;
     }
     
-    lists.forEach(list => {
-        const listCard = document.createElement('div');
-        listCard.className = 'list-card';
-        listCard.innerHTML = `
-            <h3>${escapeHtml(list.name)}</h3>
-            <p>${escapeHtml(list.description || 'No description')}</p>
-            <div class="list-meta">
-                <span>${list.role}</span>
-                <span>${formatDate(list.eventDate)}</span>
-            </div>
-        `;
+    // Separate owned/collaborator lists from viewed lists
+    const ownedLists = lists.filter(list => list.role && list.role !== 'viewer');
+    const viewedLists = lists.filter(list => list.role === 'viewer' || list.accessRole === 'viewer');
+    
+    // Display owned/collaborator lists first
+    if (ownedLists.length > 0) {
+        const ownedSection = document.createElement('div');
+        ownedSection.innerHTML = '<h3>My Lists</h3>';
+        container.appendChild(ownedSection);
         
-        listCard.addEventListener('click', () => {
-            currentListId = list.id;
-            loadList(list.id);
+        ownedLists.forEach(list => {
+            const listCard = createListCard(list);
+            container.appendChild(listCard);
         });
+    }
+    
+    // Display viewed lists second
+    if (viewedLists.length > 0) {
+        const viewedSection = document.createElement('div');
+        viewedSection.innerHTML = '<h3>Recently Viewed</h3>';
+        container.appendChild(viewedSection);
         
-        container.appendChild(listCard);
+        viewedLists.forEach(list => {
+            const listCard = createListCard(list);
+            container.appendChild(listCard);
+        });
+    }
+}
+
+function createListCard(list) {
+    const listCard = document.createElement('div');
+    listCard.className = 'list-card';
+    
+    // Determine role display text
+    let roleText = list.role || 'viewer';
+    if (list.accessRole === 'viewer') {
+        roleText = 'viewer';
+    }
+    
+    listCard.innerHTML = `
+        <h3>${escapeHtml(list.name)}</h3>
+        <p>${escapeHtml(list.description || 'No description')}</p>
+        <div class="list-meta">
+            <span class="list-role">${roleText}</span>
+            <span>${formatDate(list.eventDate)}</span>
+            ${list.viewedAt ? `<span class="viewed-date">Viewed: ${formatDate(list.viewedAt)}</span>` : ''}
+        </div>
+    `;
+    
+    listCard.addEventListener('click', () => {
+        currentListId = list.id;
+        // Set viewer mode for viewed lists
+        if (list.accessRole === 'viewer' || list.role === 'viewer') {
+            showAsViewer = true;
+            showBoughtItems = true;
+            // Update viewer toggle UI
+            const showAsViewerToggle = document.getElementById('showAsViewerToggle');
+            if (showAsViewerToggle) {
+                showAsViewerToggle.checked = true;
+            }
+        }
+        loadList(list.id);
     });
+    
+    return listCard;
 }
 
 async function createNewList() {
@@ -1277,6 +1380,23 @@ async function loadList(listId) {
         // Final permission check to ensure buttons are properly hidden for viewers
         enforceViewerPermissions();
         
+        // Save to viewed lists if user is accessing as viewer
+        const isOwner = currentUser && currentUser.email === currentList.owner;
+        const collaboratorsField = currentList.collaborators || [];
+        const isCollaborator = currentUser && (
+            Array.isArray(collaboratorsField)
+                ? collaboratorsField.includes(currentUser.email)
+                : typeof collaboratorsField === 'object' && collaboratorsField !== null
+                    ? Object.values(collaboratorsField).includes(currentUser.email)
+                    : false
+        );
+        const canEdit = isOwner || isCollaborator;
+        
+        // Save to viewed lists if user is not owner or collaborator (i.e., they're a viewer)
+        if (currentUser && !canEdit) {
+            saveViewedList(listId);
+        }
+        
         clearTimeout(safetyTimeout);
         hideLoading();
         console.log('List loaded successfully');
@@ -1334,16 +1454,16 @@ function displayList(list) {
 
 
 
-    // Show/hide extensive moving toggle for owners/collaborators
+    // Show/hide extensive moving toggle for owners/collaborators (hide from viewers)
     const extensiveMovingToggle = document.getElementById('extensiveMovingToggle');
     if (extensiveMovingToggle) {
-        extensiveMovingToggle.style.display = canEdit ? 'flex' : 'none';
+        extensiveMovingToggle.style.display = (canEdit && !showAsViewer) ? 'flex' : 'none';
     }
 
-    // Show/hide viewer mode toggle for owners/collaborators
+    // Show/hide viewer mode toggle for owners/collaborators (hide from viewers)
     const viewerModeToggle = document.getElementById('viewerModeToggle');
     if (viewerModeToggle) {
-        viewerModeToggle.style.display = canEdit ? 'flex' : 'none';
+        viewerModeToggle.style.display = (canEdit && !showAsViewer) ? 'flex' : 'none';
     }
 
     // Hide edit controls when in viewer mode
@@ -4397,6 +4517,75 @@ async function updateItemPosition(itemId, newPosition) {
     });
 }
 
+// Viewed Lists functions
+async function saveViewedList(listId) {
+    if (!currentUser || !listId) {
+        console.log('Cannot save viewed list: missing user or listId');
+        return;
+    }
+    
+    try {
+        const userViewedListsRef = db.collection('users').doc(currentUser.uid).collection('viewedLists');
+        const viewedListDoc = {
+            listId: listId,
+            viewedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            accessRole: 'viewer' // Always save as viewer since that's what this feature tracks
+        };
+        
+        // Use set with merge to update the timestamp if already exists
+        await userViewedListsRef.doc(listId).set(viewedListDoc, { merge: true });
+        console.log(`Saved list ${listId} to user's viewed lists`);
+    } catch (error) {
+        console.error('Error saving viewed list:', error);
+        // Don't show toast to user as this is background functionality
+    }
+}
+
+async function loadViewedLists() {
+    if (!currentUser) {
+        console.log('Cannot load viewed lists: no user');
+        return [];
+    }
+    
+    try {
+        const userViewedListsRef = db.collection('users').doc(currentUser.uid).collection('viewedLists');
+        const snapshot = await userViewedListsRef.orderBy('viewedAt', 'desc').limit(10).get();
+        
+        const viewedListIds = [];
+        snapshot.forEach(doc => {
+            viewedListIds.push(doc.data().listId);
+        });
+        
+        if (viewedListIds.length === 0) {
+            return [];
+        }
+        
+        // Fetch actual list data
+        const listsPromises = viewedListIds.map(listId => 
+            db.collection('lists').doc(listId).get()
+        );
+        
+        const listDocs = await Promise.all(listsPromises);
+        const viewedLists = [];
+        
+        listDocs.forEach((doc, index) => {
+            if (doc.exists) {
+                viewedLists.push({
+                    id: doc.id,
+                    ...doc.data(),
+                    viewedAt: snapshot.docs[index].data().viewedAt,
+                    accessRole: 'viewer'
+                });
+            }
+        });
+        
+        return viewedLists;
+    } catch (error) {
+        console.error('Error loading viewed lists:', error);
+        return [];
+    }
+}
+
 // Settings functions
 async function saveSettings() {
     if (!currentUser || !currentList || currentUser.email !== currentList.owner) {
@@ -5462,16 +5651,55 @@ function toggleSidebar() {
  */
 function populateSidebarLists() {
     sidebarListContainer.innerHTML = ''; // Clear existing lists
-    if (userLists.length === 0) {
+    
+    const hasUserLists = userLists.length > 0;
+    const hasViewedLists = viewedListsGlobal.length > 0;
+    
+    if (!hasUserLists && !hasViewedLists) {
         sidebarListContainer.innerHTML = '<li class="text-center mt-3">No lists yet.</li>';
         return;
     }
-    userLists.forEach(list => {
-        const listItem = document.createElement('li');
-        listItem.dataset.listId = list.id;
-        listItem.textContent = list.name;
-        sidebarListContainer.appendChild(listItem);
-    });
+    
+    // Add user lists
+    if (hasUserLists) {
+        const userListsHeader = document.createElement('li');
+        userListsHeader.className = 'sidebar-section-header';
+        userListsHeader.textContent = 'My Lists';
+        sidebarListContainer.appendChild(userListsHeader);
+        
+        userLists.forEach(list => {
+            const listItem = document.createElement('li');
+            listItem.dataset.listId = list.id;
+            listItem.textContent = list.name;
+            listItem.className = 'sidebar-list-item';
+            sidebarListContainer.appendChild(listItem);
+        });
+    }
+    
+    // Add viewed lists
+    if (hasViewedLists) {
+        const viewedListsHeader = document.createElement('li');
+        viewedListsHeader.className = 'sidebar-section-header';
+        viewedListsHeader.textContent = 'Recently Viewed';
+        sidebarListContainer.appendChild(viewedListsHeader);
+        
+        viewedListsGlobal.forEach(list => {
+            const listItem = document.createElement('li');
+            listItem.dataset.listId = list.id;
+            listItem.textContent = list.name;
+            listItem.className = 'sidebar-list-item viewed-list';
+            
+            // Add click handler to set viewer mode
+            listItem.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showAsViewer = true;
+                showBoughtItems = true;
+                loadList(list.id);
+            });
+            
+            sidebarListContainer.appendChild(listItem);
+        });
+    }
 }
 
 function showInfoModal(item) {
@@ -6203,16 +6431,55 @@ function toggleSidebar() {
  */
 function populateSidebarLists() {
     sidebarListContainer.innerHTML = ''; // Clear existing lists
-    if (userLists.length === 0) {
+    
+    const hasUserLists = userLists.length > 0;
+    const hasViewedLists = viewedListsGlobal.length > 0;
+    
+    if (!hasUserLists && !hasViewedLists) {
         sidebarListContainer.innerHTML = '<li class="text-center mt-3">No lists yet.</li>';
         return;
     }
-    userLists.forEach(list => {
-        const listItem = document.createElement('li');
-        listItem.dataset.listId = list.id;
-        listItem.textContent = list.name;
-        sidebarListContainer.appendChild(listItem);
-    });
+    
+    // Add user lists
+    if (hasUserLists) {
+        const userListsHeader = document.createElement('li');
+        userListsHeader.className = 'sidebar-section-header';
+        userListsHeader.textContent = 'My Lists';
+        sidebarListContainer.appendChild(userListsHeader);
+        
+        userLists.forEach(list => {
+            const listItem = document.createElement('li');
+            listItem.dataset.listId = list.id;
+            listItem.textContent = list.name;
+            listItem.className = 'sidebar-list-item';
+            sidebarListContainer.appendChild(listItem);
+        });
+    }
+    
+    // Add viewed lists
+    if (hasViewedLists) {
+        const viewedListsHeader = document.createElement('li');
+        viewedListsHeader.className = 'sidebar-section-header';
+        viewedListsHeader.textContent = 'Recently Viewed';
+        sidebarListContainer.appendChild(viewedListsHeader);
+        
+        viewedListsGlobal.forEach(list => {
+            const listItem = document.createElement('li');
+            listItem.dataset.listId = list.id;
+            listItem.textContent = list.name;
+            listItem.className = 'sidebar-list-item viewed-list';
+            
+            // Add click handler to set viewer mode
+            listItem.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showAsViewer = true;
+                showBoughtItems = true;
+                loadList(list.id);
+            });
+            
+            sidebarListContainer.appendChild(listItem);
+        });
+    }
 }
 
 function showInfoModal(item) {
