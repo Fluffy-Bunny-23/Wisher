@@ -1456,14 +1456,58 @@ function displayList(list) {
 
     // Show/hide extensive moving toggle for owners/collaborators (hide from viewers)
     const extensiveMovingToggle = document.getElementById('extensiveMovingToggle');
+    console.log('displayList - canEdit:', canEdit, 'showAsViewer:', showAsViewer, 'shouldShow:', canEdit && !showAsViewer);
     if (extensiveMovingToggle) {
-        extensiveMovingToggle.style.display = (canEdit && !showAsViewer) ? 'flex' : 'none';
+        if (canEdit && !showAsViewer) {
+            // Show toggle
+            extensiveMovingToggle.style.display = 'flex';
+            extensiveMovingToggle.style.visibility = 'visible';
+            extensiveMovingToggle.style.opacity = '1';
+            extensiveMovingToggle.style.height = 'auto';
+            extensiveMovingToggle.style.width = 'auto';
+            extensiveMovingToggle.style.pointerEvents = 'auto';
+            extensiveMovingToggle.classList.remove('force-hidden');
+            console.log('displayList - SHOWING extensiveMovingToggle');
+        } else {
+            // Hide toggle with multiple methods
+            extensiveMovingToggle.style.display = 'none';
+            extensiveMovingToggle.style.visibility = 'hidden';
+            extensiveMovingToggle.style.opacity = '0';
+            extensiveMovingToggle.style.height = '0';
+            extensiveMovingToggle.style.width = '0';
+            extensiveMovingToggle.style.pointerEvents = 'none';
+            extensiveMovingToggle.classList.add('force-hidden');
+            console.log('displayList - HIDING extensiveMovingToggle');
+        }
+        console.log('displayList - extensiveMovingToggle display:', extensiveMovingToggle.style.display, 'classList:', extensiveMovingToggle.className);
     }
-
+    
     // Show/hide viewer mode toggle for owners/collaborators (hide from viewers)
     const viewerModeToggle = document.getElementById('viewerModeToggle');
+    console.log('displayList - canEdit:', canEdit, 'showAsViewer:', showAsViewer, 'shouldShow:', canEdit && !showAsViewer);
     if (viewerModeToggle) {
-        viewerModeToggle.style.display = (canEdit && !showAsViewer) ? 'flex' : 'none';
+        if (canEdit && !showAsViewer) {
+            // Show toggle
+            viewerModeToggle.style.display = 'flex';
+            viewerModeToggle.style.visibility = 'visible';
+            viewerModeToggle.style.opacity = '1';
+            viewerModeToggle.style.height = 'auto';
+            viewerModeToggle.style.width = 'auto';
+            viewerModeToggle.style.pointerEvents = 'auto';
+            viewerModeToggle.classList.remove('force-hidden');
+            console.log('displayList - SHOWING viewerModeToggle');
+        } else {
+            // Hide toggle with multiple methods
+            viewerModeToggle.style.display = 'none';
+            viewerModeToggle.style.visibility = 'hidden';
+            viewerModeToggle.style.opacity = '0';
+            viewerModeToggle.style.height = '0';
+            viewerModeToggle.style.width = '0';
+            viewerModeToggle.style.pointerEvents = 'none';
+            viewerModeToggle.classList.add('force-hidden');
+            console.log('displayList - HIDING viewerModeToggle');
+        }
+        console.log('displayList - viewerModeToggle display:', viewerModeToggle.style.display, 'classList:', viewerModeToggle.className);
     }
 
     // Hide edit controls when in viewer mode
