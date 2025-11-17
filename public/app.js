@@ -1111,12 +1111,12 @@ function toggleSidebarNew() {
 async function signInWithGoogle() {
     console.log('Starting robust Google sign in process');
     
-    // Set a safety timeout to hide the loading spinner after 20 seconds
+    // Set a safety timeout to hide the loading spinner after 45 seconds
     const safetyTimeout = setTimeout(() => {
         console.log('Safety timeout triggered - hiding loading spinner');
         hideLoading();
         showToast('Sign in process timed out. Please try again.', 'error');
-    }, 20000);
+    }, 45000);
     
     let retryCount = 0;
     const maxRetries = 3;
@@ -1148,7 +1148,7 @@ async function signInWithGoogle() {
             // Add timeout to the sign-in operation
             const signInPromise = auth.signInWithPopup(provider);
             const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error('Sign-in operation timed out')), 15000);
+                setTimeout(() => reject(new Error('Sign-in operation timed out')), 45000);
             });
             
             const result = await Promise.race([signInPromise, timeoutPromise]);
