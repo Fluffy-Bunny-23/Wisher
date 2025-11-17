@@ -261,7 +261,7 @@ function showUndoToast(message, undoCallback) {
 }
 
 function setupAuthStateListener() {
-    console.log('Setting up auth state listener');
+    console.log('Setting up robust auth state listener');
     
     // Check if firebaseAuth is initialized (with fallback to window.firebaseAuth)
     const auth = firebaseAuth || window.firebaseAuth;
@@ -274,31 +274,126 @@ function setupAuthStateListener() {
     try {
         const unsubscribe = auth.onAuthStateChanged(user => {
             console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
+            
             if (user) {
-                console.log('User provider data:', user.providerData); // Add this line to inspect provider data
-            }
-            if (user) {
+                console.log('User provider data:', user.providerData);
                 console.log('User details:', user.email, user.uid, user.providerData);
+                
+                // Verify user is properly authenticated
+                if (user.emailVerified === false && user.providerData.some(p => p.providerId === 'password')) {
+                    console.warn('Email not verified for user:', user.email);
+                    showToast('Please verify your email address. Check your inbox for verification email.', 'warning');
+                }
+                
                 currentUser = user;
+                
+                // Store auth state for recovery
+                localStorage.setItem('authState', JSON.stringify({
+                    uid: user.uid,
+                    email: user.email,
+                    displayName: user.displayName,
+                    photoURL: user.photoURL,
+                    lastSignIn: new Date().toISOString()
+                }));
+                
                 onUserSignedIn();
             } else {
                 console.log('No user signed in');
                 currentUser = null;
+                
+                // Clear stored auth state
+                localStorage.removeItem('authState');
+                
                 onUserSignedOut();
             }
         }, error => {
             console.error('Auth state listener error:', error);
-            showToast('Authentication error: ' + error.message, 'error');
+            
+            // Get user-friendly error message
+            const authSettings = window.authSettings || {};
+            const errorMessage = authSettings.errorMap?.[error.code] || error.message || 'Unknown authentication error';
+            
+            showToast('Authentication error: ' + errorMessage, 'error');
+            
+            // Attempt to recover from certain errors
+            if (error.code === 'auth/network-request-failed') {
+                console.log('Network error detected, will retry auth state detection');
+                setTimeout(() => {
+                    console.log('Retrying auth state detection...');
+                    auth.currentUser?.reload().catch(err => {
+                        console.warn('Failed to reload user:', err);
+                    });
+                }, 3000);
+            }
         });
         
         console.log('Auth state listener set up successfully');
         
         // Store the unsubscribe function for potential cleanup
         window.authUnsubscribe = unsubscribe;
+        
+        // Set up additional auth state recovery mechanisms
+        setupAuthRecovery();
+        
     } catch (error) {
         console.error('Error setting up auth state listener:', error);
         showToast('Failed to initialize authentication. Please refresh the page.', 'error');
     }
+}
+
+// Auth recovery mechanism for handling edge cases
+function setupAuthRecovery() {
+    const auth = firebaseAuth || window.firebaseAuth;
+    if (!auth) return;
+    
+    // Check for stored auth state on page load
+    const storedAuthState = localStorage.getItem('authState');
+    if (storedAuthState && !auth.currentUser) {
+        try {
+            const authData = JSON.parse(storedAuthState);
+            const timeSinceLastSignIn = new Date() - new Date(authData.lastSignIn);
+            
+            // Only attempt recovery if recent (within 1 hour)
+            if (timeSinceLastSignIn < 3600000) {
+                console.log('Attempting auth recovery from stored state');
+                
+                // Wait a bit for Firebase to fully initialize
+                setTimeout(() => {
+                    auth.onAuthStateChanged(user => {
+                        if (!user) {
+                            console.log('Auth recovery failed, user still not authenticated');
+                            localStorage.removeItem('authState');
+                        } else {
+                            console.log('Auth recovery successful');
+                        }
+                    });
+                }, 1000);
+            } else {
+                console.log('Stored auth state expired, clearing');
+                localStorage.removeItem('authState');
+            }
+        } catch (error) {
+            console.error('Error parsing stored auth state:', error);
+            localStorage.removeItem('authState');
+        }
+    }
+    
+    // Set up periodic auth state verification
+    setInterval(() => {
+        if (auth.currentUser) {
+            auth.currentUser.getIdToken(true)
+                .then(() => {
+                    console.log('Auth token refreshed successfully');
+                })
+                .catch(error => {
+                    console.warn('Failed to refresh auth token:', error);
+                    if (error.code === 'auth/user-token-expired' || error.code === 'auth/id-token-expired') {
+                        console.log('Token expired, signing out');
+                        auth.signOut();
+                    }
+                });
+        }
+    }, 300000); // Every 5 minutes
 }
 
 // Initialize app
@@ -1012,52 +1107,131 @@ function toggleSidebarNew() {
     }
 }
 
-// Authentication functions
+// Authentication functions with robust error handling
 async function signInWithGoogle() {
-    console.log('Starting Google sign in process');
+    console.log('Starting robust Google sign in process');
     
-    // Set a safety timeout to hide the loading spinner after 15 seconds
-    // in case the auth state change event doesn't fire
+    // Set a safety timeout to hide the loading spinner after 20 seconds
     const safetyTimeout = setTimeout(() => {
         console.log('Safety timeout triggered - hiding loading spinner');
         hideLoading();
         showToast('Sign in process timed out. Please try again.', 'error');
-    }, 15000);
+    }, 20000);
     
-    try {
-        showLoading();
-        console.log('Showing loading spinner');
-        
-        // Check if firebaseAuth is initialized (with fallback to window.firebaseAuth)
-        const auth = firebaseAuth || window.firebaseAuth;
-        if (!auth) {
-            console.error('Firebase Auth not initialized');
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    async function attemptSignIn() {
+        try {
+            showLoading();
+            console.log(`Google sign-in attempt ${retryCount + 1}/${maxRetries}`);
+            
+            // Check if firebaseAuth is initialized (with fallback to window.firebaseAuth)
+            const auth = firebaseAuth || window.firebaseAuth;
+            if (!auth) {
+                throw new Error('Firebase Auth not initialized');
+            }
+            
+            // Check if googleProvider is initialized (with fallback to window.googleProvider)
+            const provider = googleProvider || window.googleProvider;
+            if (!provider) {
+                throw new Error('Google Auth Provider not initialized');
+            }
+            
+            // Check network connectivity
+            if (!navigator.onLine) {
+                throw new Error('No internet connection. Please check your network and try again.');
+            }
+            
+            console.log('Calling signInWithPopup with googleProvider');
+            
+            // Add timeout to the sign-in operation
+            const signInPromise = auth.signInWithPopup(provider);
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Sign-in operation timed out')), 15000);
+            });
+            
+            const result = await Promise.race([signInPromise, timeoutPromise]);
+            console.log('Sign in successful, result:', result);
+            
             clearTimeout(safetyTimeout);
             hideLoading();
-            showToast('Authentication service not available. Please refresh the page.', 'error');
-            return;
-        }
-        
-        // Check if googleProvider is initialized (with fallback to window.googleProvider)
-        const provider = googleProvider || window.googleProvider;
-        if (!provider) {
-            console.error('Google Auth Provider not initialized');
+            
+            // Show success message
+            showToast('Successfully signed in with Google!', 'success');
+            
+            return result;
+            
+        } catch (error) {
+            console.error(`Google sign-in error (attempt ${retryCount + 1}):`, error);
+            
+            // Get user-friendly error message
+            const authSettings = window.authSettings || {};
+            let errorMessage = authSettings.errorMap?.[error.code] || error.message || 'Unknown error occurred';
+            
+            // Handle specific error cases
+            if (error.code === 'auth/popup-blocked') {
+                errorMessage = 'Pop-up was blocked by your browser. Please allow pop-ups for this site and try again.';
+                
+                // Show instructions for enabling popups
+                setTimeout(() => {
+                    showToast('To enable pop-ups: Click the lock icon in your address bar, then allow pop-ups.', 'info', 8000);
+                }, 2000);
+                
+            } else if (error.code === 'auth/popup-closed-by-user') {
+                errorMessage = 'Sign-in was cancelled. Please try again.';
+                
+            } else if (error.code === 'auth/network-request-failed') {
+                errorMessage = 'Network connection failed. Please check your internet connection and try again.';
+                
+                // Retry on network errors
+                if (retryCount < maxRetries - 1) {
+                    retryCount++;
+                    console.log(`Retrying sign-in due to network error (${retryCount}/${maxRetries})`);
+                    
+                    showToast(`Network error. Retrying... (${retryCount}/${maxRetries})`, 'warning', 2000);
+                    
+                    // Wait before retrying
+                    await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
+                    return attemptSignIn();
+                }
+                
+            } else if (error.message && error.message.includes('Sign-in operation timed out')) {
+                errorMessage = 'Sign-in timed out. This might be due to a slow connection. Please try again.';
+                
+                // Retry on timeout
+                if (retryCount < maxRetries - 1) {
+                    retryCount++;
+                    console.log(`Retrying sign-in due to timeout (${retryCount}/${maxRetries})`);
+                    
+                    showToast('Sign-in timed out. Retrying...', 'warning', 2000);
+                    
+                    await new Promise(resolve => setTimeout(resolve, 3000 * retryCount));
+                    return attemptSignIn();
+                }
+            }
+            
             clearTimeout(safetyTimeout);
             hideLoading();
-            showToast('Google sign-in service not available. Please refresh the page.', 'error');
-            return;
+            showToast('Error signing in with Google: ' + errorMessage, 'error');
+            
+            // Log additional error details for debugging
+            if (error.code) {
+                console.error('Error code:', error.code);
+            }
+            if (error.email) {
+                console.error('Error email:', error.email);
+            }
+            if (error.credential) {
+                console.error('Error credential present:', !!error.credential);
+            }
+            
+            throw error;
         }
-        
-        console.log('Calling signInWithPopup with googleProvider');
-        const result = await auth.signInWithPopup(provider);
-        console.log('Sign in successful, result:', result);
-        clearTimeout(safetyTimeout);
-    } catch (error) {
-        console.error('Google sign in error:', error);
-        clearTimeout(safetyTimeout);
-        hideLoading();
-        showToast('Error signing in with Google: ' + error.message, 'error');
     }
+    
+    // Start the sign-in process
+    return attemptSignIn();
 }
 
 function toggleEmailAuth() {
@@ -1074,13 +1248,63 @@ async function signInWithEmail() {
         return;
     }
     
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        showToast('Please enter a valid email address', 'error');
+        return;
+    }
+    
     try {
         showLoading();
+        
+        // Check network connectivity
+        if (!navigator.onLine) {
+            throw new Error('No internet connection. Please check your network and try again.');
+        }
+        
         const auth = firebaseAuth || window.firebaseAuth;
-        await auth.signInWithEmailAndPassword(email, password);
+        if (!auth) {
+            throw new Error('Authentication service not available. Please refresh the page.');
+        }
+        
+        // Add timeout to prevent hanging
+        const signInPromise = auth.signInWithEmailAndPassword(email, password);
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Sign-in operation timed out')), 10000);
+        });
+        
+        await Promise.race([signInPromise, timeoutPromise]);
+        
+        // Success is handled by auth state listener
+        hideLoading();
+        
     } catch (error) {
         hideLoading();
-        showToast('Error signing in: ' + error.message, 'error');
+        
+        // Get user-friendly error message
+        const authSettings = window.authSettings || {};
+        let errorMessage = authSettings.errorMap?.[error.code] || error.message || 'Unknown error occurred';
+        
+        // Handle specific error cases
+        if (error.code === 'auth/user-not-found') {
+            errorMessage = 'No account found with this email address. You may need to sign up first.';
+        } else if (error.code === 'auth/wrong-password') {
+            errorMessage = 'Incorrect password. Please try again or reset your password.';
+        } else if (error.code === 'auth/too-many-requests') {
+            errorMessage = 'Too many failed attempts. Please wait a few minutes before trying again.';
+        } else if (error.code === 'auth/user-disabled') {
+            errorMessage = 'This account has been disabled. Please contact support.';
+        } else if (error.code === 'auth/invalid-email') {
+            errorMessage = 'Please enter a valid email address.';
+        } else if (error.message && error.message.includes('Sign-in operation timed out')) {
+            errorMessage = 'Sign-in timed out. Please check your connection and try again.';
+        }
+        
+        showToast('Error signing in: ' + errorMessage, 'error');
+        
+        // Log for debugging
+        console.error('Email sign-in error:', error);
     }
 }
 
@@ -1093,18 +1317,79 @@ async function signUpWithEmail() {
         return;
     }
     
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        showToast('Please enter a valid email address', 'error');
+        return;
+    }
+    
     if (password.length < 6) {
         showToast('Password must be at least 6 characters', 'error');
         return;
     }
     
+    // Password strength validation
+    if (password.length < 8 || !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
+        showToast('For better security, use at least 8 characters with uppercase, lowercase, and numbers.', 'warning');
+    }
+    
     try {
         showLoading();
+        
+        // Check network connectivity
+        if (!navigator.onLine) {
+            throw new Error('No internet connection. Please check your network and try again.');
+        }
+        
         const auth = firebaseAuth || window.firebaseAuth;
-        await auth.createUserWithEmailAndPassword(email, password);
+        if (!auth) {
+            throw new Error('Authentication service not available. Please refresh the page.');
+        }
+        
+        // Add timeout to prevent hanging
+        const signUpPromise = auth.createUserWithEmailAndPassword(email, password);
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Account creation timed out')), 15000);
+        });
+        
+        const result = await Promise.race([signUpPromise, timeoutPromise]);
+        
+        // Send email verification
+        try {
+            await result.user.sendEmailVerification();
+            showToast('Account created! Please check your email to verify your account.', 'success');
+        } catch (verificationError) {
+            console.warn('Failed to send verification email:', verificationError);
+            showToast('Account created! You may need to verify your email address.', 'success');
+        }
+        
+        hideLoading();
+        
     } catch (error) {
         hideLoading();
-        showToast('Error creating account: ' + error.message, 'error');
+        
+        // Get user-friendly error message
+        const authSettings = window.authSettings || {};
+        let errorMessage = authSettings.errorMap?.[error.code] || error.message || 'Unknown error occurred';
+        
+        // Handle specific error cases
+        if (error.code === 'auth/email-already-in-use') {
+            errorMessage = 'An account with this email already exists. Please sign in instead.';
+        } else if (error.code === 'auth/weak-password') {
+            errorMessage = 'Password is too weak. Please use at least 6 characters.';
+        } else if (error.code === 'auth/invalid-email') {
+            errorMessage = 'Please enter a valid email address.';
+        } else if (error.code === 'auth/too-many-requests') {
+            errorMessage = 'Too many sign-up attempts. Please wait a few minutes before trying again.';
+        } else if (error.message && error.message.includes('Account creation timed out')) {
+            errorMessage = 'Account creation timed out. Please check your connection and try again.';
+        }
+        
+        showToast('Error creating account: ' + errorMessage, 'error');
+        
+        // Log for debugging
+        console.error('Email sign-up error:', error);
     }
 }
 
