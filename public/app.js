@@ -163,8 +163,8 @@ function enforceViewerPermissions() {
     }
     
     if (viewerModeToggle) {
-        if (effectiveCanEdit) {
-            // Show toggles
+        if (canEdit) {
+            // Show toggle for owners/collaborators (they can switch to viewer mode)
             viewerModeToggle.style.display = 'flex';
             viewerModeToggle.style.visibility = 'visible';
             viewerModeToggle.style.opacity = '1';
@@ -173,7 +173,7 @@ function enforceViewerPermissions() {
             viewerModeToggle.style.pointerEvents = 'auto';
             viewerModeToggle.classList.remove('force-hidden');
         } else {
-            // Hide toggles with multiple methods
+            // Hide toggle for actual viewers (they can't switch out of viewer mode)
             viewerModeToggle.style.display = 'none';
             viewerModeToggle.style.visibility = 'hidden';
             viewerModeToggle.style.opacity = '0';
@@ -1482,12 +1482,12 @@ function displayList(list) {
         console.log('displayList - extensiveMovingToggle display:', extensiveMovingToggle.style.display, 'classList:', extensiveMovingToggle.className);
     }
     
-    // Show/hide viewer mode toggle for owners/collaborators (hide from viewers)
+    // Show/hide viewer mode toggle for owners/collaborators (hide from actual viewers)
     const viewerModeToggle = document.getElementById('viewerModeToggle');
-    console.log('displayList - canEdit:', canEdit, 'showAsViewer:', showAsViewer, 'shouldShow:', canEdit && !showAsViewer);
+    console.log('displayList - canEdit:', canEdit, 'showAsViewer:', showAsViewer, 'shouldShow:', canEdit);
     if (viewerModeToggle) {
-        if (canEdit && !showAsViewer) {
-            // Show toggle
+        if (canEdit) {
+            // Show toggle for owners/collaborators (they can switch to viewer mode)
             viewerModeToggle.style.display = 'flex';
             viewerModeToggle.style.visibility = 'visible';
             viewerModeToggle.style.opacity = '1';
@@ -1497,7 +1497,7 @@ function displayList(list) {
             viewerModeToggle.classList.remove('force-hidden');
             console.log('displayList - SHOWING viewerModeToggle');
         } else {
-            // Hide toggle with multiple methods
+            // Hide toggle for actual viewers (they can't switch out of viewer mode)
             viewerModeToggle.style.display = 'none';
             viewerModeToggle.style.visibility = 'hidden';
             viewerModeToggle.style.opacity = '0';
