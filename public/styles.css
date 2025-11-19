@@ -26,6 +26,10 @@
   --md-sys-color-surface-tint: #dae8f8;
   --md-sys-color-surface-bright: #fdfbff;
   --md-sys-color-surface-dim: #d8ddf0;
+  --md-sys-color-surface-container: #eceff8;
+  --md-sys-color-surface-container-low: #f7f2fa;
+  --md-sys-color-surface-container-high: #ece6f0;
+  --md-sys-color-surface-container-highest: #e6e0e9;
   
   /* Background Colors */
   --md-sys-color-background: #fdfbff;
@@ -238,6 +242,10 @@
   --md-sys-color-surface-tint: #dae8f8;
   --md-sys-color-surface-bright: #36393f;
   --md-sys-color-surface-dim: #0c0f13;
+  --md-sys-color-surface-container: #1e2228;
+  --md-sys-color-surface-container-low: #191c1e;
+  --md-sys-color-surface-container-high: #2a2d35;
+  --md-sys-color-surface-container-highest: #353941;
   
   /* Background Colors */
   --md-sys-color-background: #101318;
@@ -460,7 +468,7 @@ p {
     overflow-x: hidden;
     overflow-y: auto;
     transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
-    padding-top: 64px;
+    padding-top: 0;
     box-shadow: var(--md-sys-elevation-level3);
     transform: translateX(-100%);
     border-right: 1px solid var(--md-sys-color-outline-variant);
@@ -645,7 +653,8 @@ p {
 }
 
 .app-bar.shifted {
-    margin-left: 300px;
+    margin-left: 320px;
+    width: calc(100% - 320px);
 }
 
 .app-bar .icon-button {
