@@ -554,12 +554,18 @@ p {
     line-height: var(--md-sys-typescale-label-large-line-height);
     letter-spacing: var(--md-sys-typescale-label-large-letter-spacing);
     color: var(--md-sys-color-on-surface-variant);
-    text-transform: uppercase;
+    text-transform: none;
     letter-spacing: 0.5px;
     font-weight: 600;
     margin-top: 16px;
-    border-bottom: 1px solid var(--md-sys-color-outline-variant);
     padding-bottom: 4px;
+    cursor: default !important;
+    background-color: transparent !important;
+}
+
+.sidebar-section-header:hover {
+    background-color: transparent !important;
+    color: var(--md-sys-color-on-surface-variant) !important;
 }
 
 .sidebar-section-header:first-child {

@@ -614,6 +614,10 @@ function onUserSignedIn() {
             // Load specific list from URL/storage
             console.log('Loading specific list:', currentListId);
             loadList(currentListId);
+            
+            // Also load user lists in background to populate sidebar
+            loadUserLists(false);
+
             if (currentListRole) {
                 handleSharedListAccess(currentListId, currentListRole);
             }
@@ -1387,29 +1391,35 @@ async function signOut() {
 }
 
 // List management functions
-async function loadUserLists() {
+async function loadUserLists(showSpinner = true) {
     console.log('Loading user lists for:', currentUser); console.log('Current user email:', currentUser ? currentUser.email : 'No user logged in');
     if (!currentUser) {
         console.log('No current user, returning');
         return;
     }
     
+    let safetyTimeout;
+    
     // Set a safety timeout to hide the loading spinner after 15 seconds
-    const safetyTimeout = setTimeout(() => {
-        console.log('Safety timeout triggered in loadUserLists - hiding loading spinner');
-        hideLoading();
-        showToast('Loading lists timed out. Please try again.', 'error');
-    }, 15000);
+    if (showSpinner) {
+        safetyTimeout = setTimeout(() => {
+            console.log('Safety timeout triggered in loadUserLists - hiding loading spinner');
+            hideLoading();
+            showToast('Loading lists timed out. Please try again.', 'error');
+        }, 15000);
+    }
     
     try {
-        showLoading();
+        if (showSpinner) showLoading();
         
         // Check if db is initialized (with fallback to window.db or window.firebaseDb)
         const database = db || window.db || window.firebaseDb;
         if (!database) {
             console.error('Firestore database not initialized');
-            clearTimeout(safetyTimeout);
-            hideLoading();
+            if (showSpinner) {
+                clearTimeout(safetyTimeout);
+                hideLoading();
+            }
             showToast('Database connection error. Please refresh the page.', 'error');
             return;
         }
@@ -1427,7 +1437,7 @@ async function loadUserLists() {
             collaboratorQuery.get()
         ]);
         
-        clearTimeout(safetyTimeout);
+        if (showSpinner) clearTimeout(safetyTimeout);
         
         console.log('Owned lists count:', ownedLists.size);
         console.log('Collaborator lists count:', collaboratorLists.size);
@@ -1452,11 +1462,13 @@ async function loadUserLists() {
         
         displayLists(allListsWithViewed);
         populateSidebarLists();
-        hideLoading();
+        if (showSpinner) hideLoading();
     } catch (error) {
         console.error('Error loading lists:', error);
-        clearTimeout(safetyTimeout);
-        hideLoading();
+        if (showSpinner) {
+            clearTimeout(safetyTimeout);
+            hideLoading();
+        }
         showToast('Error loading lists: ' + error.message, 'error');
     }
 }
