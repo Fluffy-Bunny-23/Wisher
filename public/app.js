@@ -5170,12 +5170,32 @@ async function checkItemPrice(itemId) {
         showLoading();
         showToast('Checking price and availability...', 'info');
 
-        const PROMPT = `Extract the current price and availability from this URL: ${item.url}. 
-        Return ONLY a JSON object with the following keys:
-        - "price": The numeric price (e.g., 29.99). If not found, return null.
-        - "availability": A short string describing availability (e.g., "In Stock", "Out of Stock", "Pre-order"). If not found, return null.
-        
-        JSON:`;
+        // Detect if URL is Amazon
+        const isAmazon = item.url.includes('amazon.com') || item.url.includes('amazon.');
+
+        let PROMPT;
+        if (isAmazon) {
+            // For Amazon, provide specific HTML structure to look for
+            PROMPT = `You are viewing an Amazon product page at this URL: ${item.url}. 
+            
+Extract the price and availability by looking for these specific HTML elements:
+- Price: Look for elements with classes "a-price-whole" (whole number), "a-price-decimal" (decimal point), and "a-price-fraction" (cents). Combine them to get the full price.
+- Availability: Look for text like "In Stock", "Out of Stock", "Currently unavailable", "Only X left in stock", etc.
+
+Return ONLY a JSON object with these keys:
+- "price": The numeric price (e.g., 50.39). Combine the whole and fraction parts. If not found, return null.
+- "availability": A short string describing availability (e.g., "In Stock", "Out of Stock"). If not found, return null.
+
+JSON:`;
+        } else {
+            // For other sites, use general extraction
+            PROMPT = `Extract the current price and availability from this URL: ${item.url}. 
+            Return ONLY a JSON object with the following keys:
+            - "price": The numeric price (e.g., 29.99). If not found, return null.
+            - "availability": A short string describing availability (e.g., "In Stock", "Out of Stock", "Pre-order"). If not found, return null.
+            
+            JSON:`;
+        }
 
         const generatedText = await callGemini(PROMPT, apiKey);
 
