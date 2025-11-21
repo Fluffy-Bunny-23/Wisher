@@ -59,7 +59,7 @@ function enforceViewerPermissions() {
         console.log('Cannot enforce permissions: No user or list loaded');
         return;
     }
-    
+
     // Determine user permissions
     const isOwner = currentUser.email === currentList.owner;
     const collaboratorsField = currentList.collaborators || [];
@@ -70,30 +70,30 @@ function enforceViewerPermissions() {
             : false;
     const canEdit = isOwner || isCollaborator;
     const effectiveCanEdit = canEdit && !showAsViewer;
-    
+
     console.log('Enforcing permissions - isOwner:', isOwner, 'isCollaborator:', isCollaborator, 'showAsViewer:', showAsViewer, 'effectiveCanEdit:', effectiveCanEdit);
-    
+
     // Force hide buttons from viewers
     const addItemBtn = document.getElementById('addItemBtn');
     const addGroupBtn = document.getElementById('addGroupBtn');
     const manageListBtn = document.getElementById('manageListBtn');
     const importListBtn = document.getElementById('importListBtn');
-    
+
     if (addItemBtn) {
         addItemBtn.style.display = effectiveCanEdit ? 'flex' : 'none';
         console.log('addItemBtn display:', addItemBtn.style.display);
     }
-    
+
     if (addGroupBtn) {
         addGroupBtn.style.display = effectiveCanEdit ? 'flex' : 'none';
         console.log('addGroupBtn display:', addGroupBtn.style.display);
     }
-    
+
     if (manageListBtn) {
         manageListBtn.style.display = (isOwner && !showAsViewer) ? 'flex' : 'none';
         console.log('manageListBtn display:', manageListBtn.style.display);
     }
-    
+
     // Extra aggressive hiding for importListBtn due to CSS !important override
     if (importListBtn) {
         if (isOwner && !showAsViewer) {
@@ -114,7 +114,7 @@ function enforceViewerPermissions() {
             importListBtn.style.width = '0';
             importListBtn.style.pointerEvents = 'none';
             importListBtn.classList.add('force-hidden');
-            
+
             // Also try removing from DOM temporarily
             setTimeout(() => {
                 if (importListBtn && importListBtn.parentNode && !isOwner) {
@@ -134,11 +134,11 @@ function enforceViewerPermissions() {
         }
         console.log('importListBtn display:', importListBtn.style.display, 'visibility:', importListBtn.style.visibility, 'classList:', importListBtn.className);
     }
-    
+
     // Hide toggle switches from viewers with aggressive methods
     const extensiveMovingToggle = document.getElementById('extensiveMovingToggle');
     const viewerModeToggle = document.getElementById('viewerModeToggle');
-    
+
     if (extensiveMovingToggle) {
         if (effectiveCanEdit) {
             // Show toggles
@@ -161,7 +161,7 @@ function enforceViewerPermissions() {
         }
         console.log('extensiveMovingToggle display:', extensiveMovingToggle.style.display, 'visibility:', extensiveMovingToggle.style.visibility);
     }
-    
+
     if (viewerModeToggle) {
         if (canEdit) {
             // Show toggle for owners/collaborators (they can switch to viewer mode)
@@ -195,7 +195,7 @@ function showUserStatus() {
     // Determine user role
     let userRole = 'viewer';
     let roleColor = '#FF9800'; // Orange for viewer
-    
+
     if (currentUser.email === currentList.owner) {
         userRole = 'owner';
         roleColor = '#4CAF50'; // Green for owner
@@ -206,7 +206,7 @@ function showUserStatus() {
             : typeof collaboratorsField === 'object' && collaboratorsField !== null
                 ? Object.values(collaboratorsField).includes(currentUser.email)
                 : false;
-        
+
         if (isCollaborator) {
             userRole = 'collaborator';
             roleColor = '#2196F3'; // Blue for collaborator
@@ -262,7 +262,7 @@ function showUndoToast(message, undoCallback) {
 
 function setupAuthStateListener() {
     console.log('Setting up robust auth state listener');
-    
+
     // Check if firebaseAuth is initialized (with fallback to window.firebaseAuth)
     const auth = firebaseAuth || window.firebaseAuth;
     if (!auth) {
@@ -270,23 +270,23 @@ function setupAuthStateListener() {
         showToast('Authentication service not available. Please refresh the page.', 'error');
         return;
     }
-    
+
     try {
         const unsubscribe = auth.onAuthStateChanged(user => {
             console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
-            
+
             if (user) {
                 console.log('User provider data:', user.providerData);
                 console.log('User details:', user.email, user.uid, user.providerData);
-                
+
                 // Verify user is properly authenticated
                 if (user.emailVerified === false && user.providerData.some(p => p.providerId === 'password')) {
                     console.warn('Email not verified for user:', user.email);
                     showToast('Please verify your email address. Check your inbox for verification email.', 'warning');
                 }
-                
+
                 currentUser = user;
-                
+
                 // Store auth state for recovery
                 localStorage.setItem('authState', JSON.stringify({
                     uid: user.uid,
@@ -295,26 +295,26 @@ function setupAuthStateListener() {
                     photoURL: user.photoURL,
                     lastSignIn: new Date().toISOString()
                 }));
-                
+
                 onUserSignedIn();
             } else {
                 console.log('No user signed in');
                 currentUser = null;
-                
+
                 // Clear stored auth state
                 localStorage.removeItem('authState');
-                
+
                 onUserSignedOut();
             }
         }, error => {
             console.error('Auth state listener error:', error);
-            
+
             // Get user-friendly error message
             const authSettings = window.authSettings || {};
             const errorMessage = authSettings.errorMap?.[error.code] || error.message || 'Unknown authentication error';
-            
+
             showToast('Authentication error: ' + errorMessage, 'error');
-            
+
             // Attempt to recover from certain errors
             if (error.code === 'auth/network-request-failed') {
                 console.log('Network error detected, will retry auth state detection');
@@ -326,15 +326,15 @@ function setupAuthStateListener() {
                 }, 3000);
             }
         });
-        
+
         console.log('Auth state listener set up successfully');
-        
+
         // Store the unsubscribe function for potential cleanup
         window.authUnsubscribe = unsubscribe;
-        
+
         // Set up additional auth state recovery mechanisms
         setupAuthRecovery();
-        
+
     } catch (error) {
         console.error('Error setting up auth state listener:', error);
         showToast('Failed to initialize authentication. Please refresh the page.', 'error');
@@ -345,18 +345,18 @@ function setupAuthStateListener() {
 function setupAuthRecovery() {
     const auth = firebaseAuth || window.firebaseAuth;
     if (!auth) return;
-    
+
     // Check for stored auth state on page load
     const storedAuthState = localStorage.getItem('authState');
     if (storedAuthState && !auth.currentUser) {
         try {
             const authData = JSON.parse(storedAuthState);
             const timeSinceLastSignIn = new Date() - new Date(authData.lastSignIn);
-            
+
             // Only attempt recovery if recent (within 1 hour)
             if (timeSinceLastSignIn < 3600000) {
                 console.log('Attempting auth recovery from stored state');
-                
+
                 // Wait a bit for Firebase to fully initialize
                 setTimeout(() => {
                     auth.onAuthStateChanged(user => {
@@ -377,7 +377,7 @@ function setupAuthRecovery() {
             localStorage.removeItem('authState');
         }
     }
-    
+
     // Set up periodic auth state verification
     setInterval(() => {
         if (auth.currentUser) {
@@ -397,7 +397,7 @@ function setupAuthRecovery() {
 }
 
 // Initialize app
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     initializeApp();
     setupEventListeners();
     setupAuthStateListener();
@@ -423,16 +423,16 @@ function initializeApp() {
     try {
         // Initialize theme
         initializeTheme();
-        
+
         // Update tab title based on hostname
         updateTabTitle();
 
         // Check for list ID in URL
         const urlParams = new URLSearchParams(window.location.search);
-    const role = urlParams.get('role'); // Extract role from URL
+        const role = urlParams.get('role'); // Extract role from URL
         const listId = urlParams.get('list');
         const itemId = urlParams.get('item');
-        
+
         if (listId) {
             console.log('List ID found in URL:', listId);
             currentListId = listId;
@@ -447,10 +447,10 @@ function initializeApp() {
                 handleSharedListAccess(listId, role);
             }
         }
-        
+
         // Gemini API Key will be loaded from the list data, not localStorage directly
         // The input field will be updated when settings are loaded or a list is loaded.
-        
+
         // Ensure DOM elements are properly initialized
         console.log('Verifying DOM elements initialization');
         if (!authScreen) console.error('Element not found: authScreen');
@@ -464,7 +464,7 @@ function initializeApp() {
         if (!menuButton) console.error('Element not found: menuButton');
         if (!mainContent) console.error('Element not found: mainContent');
         if (!appBar) console.error('Element not found: appBar');
-        
+
         console.log('App initialization completed');
     } catch (error) {
         console.error('Error initializing app:', error);
@@ -475,7 +475,7 @@ function initializeTheme() {
     // Apply saved theme
     document.documentElement.setAttribute('data-theme', currentTheme);
     updateThemeIcon();
-    
+
     // Listen for system theme changes
     if (window.matchMedia) {
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -614,7 +614,7 @@ function onUserSignedIn() {
             // Load specific list from URL/storage
             console.log('Loading specific list:', currentListId);
             loadList(currentListId);
-            
+
             // Also load user lists in background to populate sidebar
             loadUserLists(false);
 
@@ -652,7 +652,7 @@ function setupEventListeners() {
 
     try {
         console.log('Setting up event listeners');
-        
+
         // Auth buttons
         const googleSignIn = document.getElementById('googleSignIn');
         if (googleSignIn) {
@@ -660,28 +660,28 @@ function setupEventListeners() {
         } else {
             console.error('Element not found: googleSignIn');
         }
-        
+
         const emailSignIn = document.getElementById('emailSignIn');
         if (emailSignIn) {
             emailSignIn.addEventListener('click', toggleEmailAuth);
         } else {
             console.error('Element not found: emailSignIn');
         }
-        
+
         const signInBtn = document.getElementById('signInBtn');
         if (signInBtn) {
             signInBtn.addEventListener('click', signInWithEmail);
         } else {
             console.error('Element not found: signInBtn');
         }
-        
+
         const signUpBtn = document.getElementById('signUpBtn');
         if (signUpBtn) {
             signUpBtn.addEventListener('click', signUpWithEmail);
         } else {
             console.error('Element not found: signUpBtn');
         }
-        
+
         // App bar buttons
         const helpBtn = document.getElementById('helpBtn');
         if (helpBtn) {
@@ -689,7 +689,7 @@ function setupEventListeners() {
         } else {
             console.error('Element not found: helpBtn');
         }
-        
+
         const settingsBtn = document.getElementById('settingsBtn');
         if (settingsBtn) {
             settingsBtn.addEventListener('click', () => {
@@ -699,21 +699,21 @@ function setupEventListeners() {
         } else {
             console.error('Element not found: settingsBtn');
         }
-        
+
         const shareBtn = document.getElementById('shareBtn');
         if (shareBtn) {
             shareBtn.addEventListener('click', () => showModal('shareModal'));
         } else {
             console.error('Element not found: shareBtn');
         }
-        
+
         const userBtn = document.getElementById('userBtn');
         if (userBtn) {
             userBtn.addEventListener('click', () => showModal('userProfileModal'));
         } else {
             console.error('Element not found: userBtn');
         }
-        
+
         // Theme toggle
         const themeToggle = document.getElementById('themeToggle');
         if (themeToggle) {
@@ -732,7 +732,7 @@ function setupEventListeners() {
         } else {
             console.error('Element not found: logoutButton');
         }
-        
+
         // List management
         const createListBtn = document.getElementById('createListBtn');
         if (createListBtn) {
@@ -740,21 +740,21 @@ function setupEventListeners() {
         } else {
             console.error('Element not found: createListBtn');
         }
-        
+
         const addItemBtn = document.getElementById('addItemBtn');
         if (addItemBtn) {
             addItemBtn.addEventListener('click', () => showAddItemModal());
         } else {
             console.error('Element not found: addItemBtn');
         }
-        
+
         const addGroupBtn = document.getElementById('addGroupBtn');
         if (addGroupBtn) {
             addGroupBtn.addEventListener('click', () => showAddGroupModal());
         } else {
             console.error('Element not found: addGroupBtn');
         }
-        
+
         const manageListBtn = document.getElementById('manageListBtn');
         if (manageListBtn) {
             manageListBtn.addEventListener('click', () => showEditModal());
@@ -768,40 +768,40 @@ function setupEventListeners() {
         } else {
             console.error('Element not found: importListBtn');
         }
-    
-    // Modals
+
+        // Modals
         const saveItemBtn = document.getElementById('saveItemBtn');
         if (saveItemBtn) {
             saveItemBtn.addEventListener('click', saveItem);
         } else {
             console.error('Element not found: saveItemBtn');
         }
-        
+
         const cancelItemBtn = document.getElementById('cancelItemBtn');
         if (cancelItemBtn) {
             cancelItemBtn.addEventListener('click', () => hideModal('itemModal'));
         } else {
             console.error('Element not found: cancelItemBtn');
         }
-        
+
         const saveSettingsBtn = document.getElementById('saveSettingsBtn');
         if (saveSettingsBtn) {
             saveSettingsBtn.addEventListener('click', saveSettings);
         } else {
             console.error('Element not found: saveSettingsBtn');
         }
-        
+
         const cancelSettingsBtn = document.getElementById('cancelSettingsBtn');
         if (cancelSettingsBtn) {
             cancelSettingsBtn.addEventListener('click', () => hideModal('settingsModal'));
         } else {
             console.error('Element not found: cancelSettingsBtn');
         }
-        
+
         const saveEditBtn = document.getElementById('saveEditBtn');
         if (saveEditBtn) {
             saveEditBtn.addEventListener('click', saveListEdit);
-        
+
         } else {
             console.error('Element not found: saveEditBtn');
         }
@@ -820,28 +820,28 @@ function setupEventListeners() {
         } else {
             console.error('Element not found: cancelGroupBtn');
         }
-        
+
         const cancelEditBtn = document.getElementById('cancelEditBtn');
         if (cancelEditBtn) {
             cancelEditBtn.addEventListener('click', () => hideModal('editModal'));
         } else {
             console.error('Element not found: cancelEditBtn');
         }
-        
+
         const addCollaboratorBtn = document.getElementById('addCollaboratorBtn');
         if (addCollaboratorBtn) {
             addCollaboratorBtn.addEventListener('click', addCollaborator);
         } else {
             console.error('Element not found: addCollaboratorBtn');
         }
-        
+
         const addViewerBtn = document.getElementById('addViewerBtn');
         if (addViewerBtn) {
             addViewerBtn.addEventListener('click', addViewer);
         } else {
             console.error('Element not found: addViewerBtn');
         }
-        
+
         // Show bought items toggle functionality now handled by showAsViewerToggle
 
         // Show as viewer toggle
@@ -851,7 +851,7 @@ function setupEventListeners() {
         } else {
             console.error('Element not found: showAsViewerToggle');
         }
-        
+
         // Extensive moving buttons toggle
         const showExtensiveMovingToggle = document.getElementById('showExtensiveMovingToggle');
         if (showExtensiveMovingToggle) {
@@ -859,7 +859,7 @@ function setupEventListeners() {
         } else {
             console.error('Element not found: showExtensiveMovingToggle');
         }
-        
+
         // Sort controls
         const sortSelect = document.getElementById('sortSelect');
         if (sortSelect) {
@@ -867,7 +867,7 @@ function setupEventListeners() {
         } else {
             console.error('Element not found: sortSelect');
         }
-        
+
         // Search and filter controls
         const searchInput = document.getElementById('searchInput');
         if (searchInput) {
@@ -875,21 +875,21 @@ function setupEventListeners() {
         } else {
             console.error('Element not found: searchInput');
         }
-        
+
         const searchClearBtn = document.getElementById('searchClearBtn');
         if (searchClearBtn) {
             searchClearBtn.addEventListener('click', clearSearch);
         } else {
             console.error('Element not found: searchClearBtn');
         }
-        
+
         const filterToggleBtn = document.getElementById('filterToggleBtn');
         if (filterToggleBtn) {
             filterToggleBtn.addEventListener('click', toggleFilterPanel);
         } else {
             console.error('Element not found: filterToggleBtn');
         }
-        
+
         const filterBackdrop = document.getElementById('filterBackdrop');
         if (filterBackdrop) {
             filterBackdrop.addEventListener('click', () => {
@@ -900,7 +900,7 @@ function setupEventListeners() {
         } else {
             console.error('Element not found: filterBackdrop');
         }
-        
+
         const filterCloseBtn = document.getElementById('filterCloseBtn');
         if (filterCloseBtn) {
             filterCloseBtn.addEventListener('click', () => {
@@ -912,23 +912,23 @@ function setupEventListeners() {
         } else {
             console.error('Element not found: filterCloseBtn');
         }
-        
+
         const applyFiltersBtn = document.getElementById('applyFiltersBtn');
         if (applyFiltersBtn) {
             applyFiltersBtn.addEventListener('click', applyFilters);
         } else {
             console.error('Element not found: applyFiltersBtn');
         }
-        
+
         const clearFiltersBtn = document.getElementById('clearFiltersBtn');
         if (clearFiltersBtn) {
             clearFiltersBtn.addEventListener('click', clearAllFilters);
         } else {
             console.error('Element not found: clearFiltersBtn');
         }
-        
 
-        
+
+
         // Price range inputs
         const minPriceInput = document.getElementById('minPriceInput');
         const maxPriceInput = document.getElementById('maxPriceInput');
@@ -938,7 +938,7 @@ function setupEventListeners() {
         if (maxPriceInput) {
             maxPriceInput.addEventListener('input', handlePriceInput);
         }
-        
+
         // Purchase status checkboxes
         const filterAvailable = document.getElementById('filterAvailable');
         const filterBought = document.getElementById('filterBought');
@@ -948,16 +948,16 @@ function setupEventListeners() {
         if (filterBought) {
             filterBought.addEventListener('change', handleStatusFilter);
         }
-        
 
-        
+
+
         // Share buttons
         try {
             setupShareButtons();
         } catch (error) {
             console.error('Error setting up share buttons:', error);
         }
-        
+
         // Modal close buttons
         try {
             const closeButtons = document.querySelectorAll('.modal-close');
@@ -976,7 +976,7 @@ function setupEventListeners() {
         } catch (error) {
             console.error('Error setting up modal close buttons:', error);
         }
-        
+
         // Click outside modal to close
         try {
             const modals = document.querySelectorAll('.modal');
@@ -994,26 +994,26 @@ function setupEventListeners() {
         } catch (error) {
             console.error('Error setting up modal click outside:', error);
         }
-        
+
         // Sidebar event listeners
         if (menuButton) {
             menuButton.addEventListener('click', toggleSidebarNew);
         } else {
             console.error('Element not found: menuButton');
         }
-        
+
         if (sidebarCloseBtn) {
             sidebarCloseBtn.addEventListener('click', toggleSidebarNew);
         } else {
             console.error('Element not found: sidebarCloseBtn');
         }
-        
+
         if (sidebarBackdrop) {
             sidebarBackdrop.addEventListener('click', toggleSidebarNew);
         } else {
             console.error('Element not found: sidebarBackdrop');
         }
-        
+
         if (createListSidebarBtn) {
             createListSidebarBtn.addEventListener('click', () => {
                 toggleSidebarNew();
@@ -1022,7 +1022,7 @@ function setupEventListeners() {
         } else {
             console.error('Element not found: createListSidebarBtn');
         }
-        
+
 
 
         // Add event delegation for sidebar list items after they are loaded
@@ -1049,8 +1049,8 @@ function setupEventListeners() {
         // Debug helper: log clicks on key management buttons so we can see if handlers are firing
         try {
             const managedButtonIds = new Set([
-                'createListBtn','createListSidebarBtn','addItemBtn','addGroupBtn','manageListBtn','importListBtn',
-                'addCollaboratorBtn','addViewerBtn','saveItemBtn','saveGroupBtn','saveEditBtn'
+                'createListBtn', 'createListSidebarBtn', 'addItemBtn', 'addGroupBtn', 'manageListBtn', 'importListBtn',
+                'addCollaboratorBtn', 'addViewerBtn', 'saveItemBtn', 'saveGroupBtn', 'saveEditBtn'
             ]);
             window.addEventListener('click', (e) => {
                 try {
@@ -1075,7 +1075,7 @@ function setupEventListeners() {
 // Updated toggleSidebar function using classes
 function toggleSidebarNew() {
     const isOpen = sidebar.classList.contains('open');
-    
+
     if (isOpen) {
         // Close sidebar
         sidebar.classList.remove('open');
@@ -1097,111 +1097,111 @@ function toggleSidebarNew() {
 // Authentication functions with robust error handling
 async function signInWithGoogle() {
     console.log('Starting robust Google sign in process');
-    
+
     // Set a safety timeout to hide the loading spinner after 45 seconds
     const safetyTimeout = setTimeout(() => {
         console.log('Safety timeout triggered - hiding loading spinner');
         hideLoading();
         showToast('Sign in process timed out. Please try again.', 'error');
     }, 45000);
-    
+
     let retryCount = 0;
     const maxRetries = 3;
-    
+
     async function attemptSignIn() {
         try {
             showLoading();
             console.log(`Google sign-in attempt ${retryCount + 1}/${maxRetries}`);
-            
+
             // Check if firebaseAuth is initialized (with fallback to window.firebaseAuth)
             const auth = firebaseAuth || window.firebaseAuth;
             if (!auth) {
                 throw new Error('Firebase Auth not initialized');
             }
-            
+
             // Check if googleProvider is initialized (with fallback to window.googleProvider)
             const provider = googleProvider || window.googleProvider;
             if (!provider) {
                 throw new Error('Google Auth Provider not initialized');
             }
-            
+
             // Check network connectivity
             if (!navigator.onLine) {
                 throw new Error('No internet connection. Please check your network and try again.');
             }
-            
+
             console.log('Calling signInWithPopup with googleProvider');
-            
+
             // Add timeout to the sign-in operation
             const signInPromise = auth.signInWithPopup(provider);
             const timeoutPromise = new Promise((_, reject) => {
                 setTimeout(() => reject(new Error('Sign-in operation timed out')), 45000);
             });
-            
+
             const result = await Promise.race([signInPromise, timeoutPromise]);
             console.log('Sign in successful, result:', result);
-            
+
             clearTimeout(safetyTimeout);
             hideLoading();
-            
+
             // Show success message
             showToast('Successfully signed in with Google!', 'success');
-            
+
             return result;
-            
+
         } catch (error) {
             console.error(`Google sign-in error (attempt ${retryCount + 1}):`, error);
-            
+
             // Get user-friendly error message
             const authSettings = window.authSettings || {};
             let errorMessage = authSettings.errorMap?.[error.code] || error.message || 'Unknown error occurred';
-            
+
             // Handle specific error cases
             if (error.code === 'auth/popup-blocked') {
                 errorMessage = 'Pop-up was blocked by your browser. Please allow pop-ups for this site and try again.';
-                
+
                 // Show instructions for enabling popups
                 setTimeout(() => {
                     showToast('To enable pop-ups: Click the lock icon in your address bar, then allow pop-ups.', 'info', 8000);
                 }, 2000);
-                
+
             } else if (error.code === 'auth/popup-closed-by-user') {
                 errorMessage = 'Sign-in was cancelled. Please try again.';
-                
+
             } else if (error.code === 'auth/network-request-failed') {
                 errorMessage = 'Network connection failed. Please check your internet connection and try again.';
-                
+
                 // Retry on network errors
                 if (retryCount < maxRetries - 1) {
                     retryCount++;
                     console.log(`Retrying sign-in due to network error (${retryCount}/${maxRetries})`);
-                    
+
                     showToast(`Network error. Retrying... (${retryCount}/${maxRetries})`, 'warning', 2000);
-                    
+
                     // Wait before retrying
                     await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
                     return attemptSignIn();
                 }
-                
+
             } else if (error.message && error.message.includes('Sign-in operation timed out')) {
                 errorMessage = 'Sign-in timed out. This might be due to a slow connection. Please try again.';
-                
+
                 // Retry on timeout
                 if (retryCount < maxRetries - 1) {
                     retryCount++;
                     console.log(`Retrying sign-in due to timeout (${retryCount}/${maxRetries})`);
-                    
+
                     showToast('Sign-in timed out. Retrying...', 'warning', 2000);
-                    
+
                     await new Promise(resolve => setTimeout(resolve, 3000 * retryCount));
                     return attemptSignIn();
                 }
             }
-            
+
             clearTimeout(safetyTimeout);
             hideLoading();
             showToast('Error signing in with Google: ' + errorMessage, 'error');
-            
+
             // Log additional error details for debugging
             if (error.code) {
                 console.error('Error code:', error.code);
@@ -1212,11 +1212,11 @@ async function signInWithGoogle() {
             if (error.credential) {
                 console.error('Error credential present:', !!error.credential);
             }
-            
+
             throw error;
         }
     }
-    
+
     // Start the sign-in process
     return attemptSignIn();
 }
@@ -1229,50 +1229,50 @@ function toggleEmailAuth() {
 async function signInWithEmail() {
     const email = document.getElementById('emailInput').value;
     const password = document.getElementById('passwordInput').value;
-    
+
     if (!email || !password) {
         showToast('Please enter email and password', 'error');
         return;
     }
-    
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
         showToast('Please enter a valid email address', 'error');
         return;
     }
-    
+
     try {
         showLoading();
-        
+
         // Check network connectivity
         if (!navigator.onLine) {
             throw new Error('No internet connection. Please check your network and try again.');
         }
-        
+
         const auth = firebaseAuth || window.firebaseAuth;
         if (!auth) {
             throw new Error('Authentication service not available. Please refresh the page.');
         }
-        
+
         // Add timeout to prevent hanging
         const signInPromise = auth.signInWithEmailAndPassword(email, password);
         const timeoutPromise = new Promise((_, reject) => {
             setTimeout(() => reject(new Error('Sign-in operation timed out')), 10000);
         });
-        
+
         await Promise.race([signInPromise, timeoutPromise]);
-        
+
         // Success is handled by auth state listener
         hideLoading();
-        
+
     } catch (error) {
         hideLoading();
-        
+
         // Get user-friendly error message
         const authSettings = window.authSettings || {};
         let errorMessage = authSettings.errorMap?.[error.code] || error.message || 'Unknown error occurred';
-        
+
         // Handle specific error cases
         if (error.code === 'auth/user-not-found') {
             errorMessage = 'No account found with this email address. You may need to sign up first.';
@@ -1287,9 +1287,9 @@ async function signInWithEmail() {
         } else if (error.message && error.message.includes('Sign-in operation timed out')) {
             errorMessage = 'Sign-in timed out. Please check your connection and try again.';
         }
-        
+
         showToast('Error signing in: ' + errorMessage, 'error');
-        
+
         // Log for debugging
         console.error('Email sign-in error:', error);
     }
@@ -1298,50 +1298,50 @@ async function signInWithEmail() {
 async function signUpWithEmail() {
     const email = document.getElementById('emailInput').value;
     const password = document.getElementById('passwordInput').value;
-    
+
     if (!email || !password) {
         showToast('Please enter email and password', 'error');
         return;
     }
-    
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
         showToast('Please enter a valid email address', 'error');
         return;
     }
-    
+
     if (password.length < 6) {
         showToast('Password must be at least 6 characters', 'error');
         return;
     }
-    
+
     // Password strength validation
     if (password.length < 8 || !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
         showToast('For better security, use at least 8 characters with uppercase, lowercase, and numbers.', 'warning');
     }
-    
+
     try {
         showLoading();
-        
+
         // Check network connectivity
         if (!navigator.onLine) {
             throw new Error('No internet connection. Please check your network and try again.');
         }
-        
+
         const auth = firebaseAuth || window.firebaseAuth;
         if (!auth) {
             throw new Error('Authentication service not available. Please refresh the page.');
         }
-        
+
         // Add timeout to prevent hanging
         const signUpPromise = auth.createUserWithEmailAndPassword(email, password);
         const timeoutPromise = new Promise((_, reject) => {
             setTimeout(() => reject(new Error('Account creation timed out')), 15000);
         });
-        
+
         const result = await Promise.race([signUpPromise, timeoutPromise]);
-        
+
         // Send email verification
         try {
             await result.user.sendEmailVerification();
@@ -1350,16 +1350,16 @@ async function signUpWithEmail() {
             console.warn('Failed to send verification email:', verificationError);
             showToast('Account created! You may need to verify your email address.', 'success');
         }
-        
+
         hideLoading();
-        
+
     } catch (error) {
         hideLoading();
-        
+
         // Get user-friendly error message
         const authSettings = window.authSettings || {};
         let errorMessage = authSettings.errorMap?.[error.code] || error.message || 'Unknown error occurred';
-        
+
         // Handle specific error cases
         if (error.code === 'auth/email-already-in-use') {
             errorMessage = 'An account with this email already exists. Please sign in instead.';
@@ -1372,9 +1372,9 @@ async function signUpWithEmail() {
         } else if (error.message && error.message.includes('Account creation timed out')) {
             errorMessage = 'Account creation timed out. Please check your connection and try again.';
         }
-        
+
         showToast('Error creating account: ' + errorMessage, 'error');
-        
+
         // Log for debugging
         console.error('Email sign-up error:', error);
     }
@@ -1397,9 +1397,9 @@ async function loadUserLists(showSpinner = true) {
         console.log('No current user, returning');
         return;
     }
-    
+
     let safetyTimeout;
-    
+
     // Set a safety timeout to hide the loading spinner after 15 seconds
     if (showSpinner) {
         safetyTimeout = setTimeout(() => {
@@ -1408,10 +1408,10 @@ async function loadUserLists(showSpinner = true) {
             showToast('Loading lists timed out. Please try again.', 'error');
         }, 15000);
     }
-    
+
     try {
         if (showSpinner) showLoading();
-        
+
         // Check if db is initialized (with fallback to window.db or window.firebaseDb)
         const database = db || window.db || window.firebaseDb;
         if (!database) {
@@ -1423,43 +1423,43 @@ async function loadUserLists(showSpinner = true) {
             showToast('Database connection error. Please refresh the page.', 'error');
             return;
         }
-        
+
         console.log('Querying Firestore for lists owned by:', currentUser.email);
         const listsQuery = database.collection('lists')
             .where('owner', '==', currentUser.email);
-        
+
         const collaboratorQuery = database.collection('lists')
             .where('collaborators', 'array-contains', currentUser.email);
-        
+
         console.log('Fetching lists from Firestore...');
         const [ownedLists, collaboratorLists] = await Promise.all([
             listsQuery.get(),
             collaboratorQuery.get()
         ]);
-        
+
         if (showSpinner) clearTimeout(safetyTimeout);
-        
+
         console.log('Owned lists count:', ownedLists.size);
         console.log('Collaborator lists count:', collaboratorLists.size);
-        
+
         const allLists = [];
         ownedLists.forEach(doc => {
             allLists.push({ id: doc.id, ...doc.data(), role: 'owner' });
         });
-        
+
         collaboratorLists.forEach(doc => {
             if (!allLists.find(list => list.id === doc.id)) {
                 allLists.push({ id: doc.id, ...doc.data(), role: 'collaborator' });
             }
         });
         userLists = allLists;
-        
+
         console.log('Total lists to display:', allLists.length);
-        
+
         // Load viewed lists and combine with user lists
         viewedListsGlobal = await loadViewedLists();
         const allListsWithViewed = [...allLists, ...viewedListsGlobal];
-        
+
         displayLists(allListsWithViewed);
         populateSidebarLists();
         if (showSpinner) hideLoading();
@@ -1476,7 +1476,7 @@ async function loadUserLists(showSpinner = true) {
 function displayLists(lists) {
     const container = document.getElementById('listsContainer');
     container.innerHTML = '';
-    
+
     if (lists.length === 0) {
         container.innerHTML = `
             <div class="text-center">
@@ -1485,29 +1485,29 @@ function displayLists(lists) {
         `;
         return;
     }
-    
+
     // Separate owned/collaborator lists from viewed lists
     const ownedLists = lists.filter(list => list.role && list.role !== 'viewer');
     const viewedLists = lists.filter(list => list.role === 'viewer' || list.accessRole === 'viewer');
-    
+
     // Display owned/collaborator lists first
     if (ownedLists.length > 0) {
         const ownedSection = document.createElement('div');
         ownedSection.innerHTML = '<h3>My Lists</h3>';
         container.appendChild(ownedSection);
-        
+
         ownedLists.forEach(list => {
             const listCard = createListCard(list);
             container.appendChild(listCard);
         });
     }
-    
+
     // Display viewed lists second
     if (viewedLists.length > 0) {
         const viewedSection = document.createElement('div');
         viewedSection.innerHTML = '<h3>Recently Viewed</h3>';
         container.appendChild(viewedSection);
-        
+
         viewedLists.forEach(list => {
             const listCard = createListCard(list);
             container.appendChild(listCard);
@@ -1518,13 +1518,13 @@ function displayLists(lists) {
 function createListCard(list) {
     const listCard = document.createElement('div');
     listCard.className = 'list-card';
-    
+
     // Determine role display text
     let roleText = list.role || 'viewer';
     if (list.accessRole === 'viewer') {
         roleText = 'viewer';
     }
-    
+
     listCard.innerHTML = `
         <h3>${escapeHtml(list.name)}</h3>
         <p>${escapeHtml(list.description || 'No description')}</p>
@@ -1534,7 +1534,7 @@ function createListCard(list) {
             ${list.viewedAt ? `<span class="viewed-date">Viewed: ${formatDate(list.viewedAt)}</span>` : ''}
         </div>
     `;
-    
+
     listCard.addEventListener('click', () => {
         currentListId = list.id;
         // Set viewer mode for viewed lists
@@ -1549,18 +1549,18 @@ function createListCard(list) {
         }
         loadList(list.id);
     });
-    
+
     return listCard;
 }
 
 async function createNewList() {
     const name = prompt('Enter list name:');
     if (!name) return;
-    
+
     const eventDate = prompt('Enter event date (YYYY-MM-DD):');
     const description = prompt('Enter description (optional):') || '';
     const geminiApiKeyForList = prompt('Enter Gemini API Key for this list (optional):') || '';
-    
+
     try {
         showLoading();
         const listData = {
@@ -1577,10 +1577,10 @@ async function createNewList() {
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
-        
+
         const docRef = await db.collection('lists').add(listData);
         currentListId = docRef.id;
-        
+
         showToast('List created successfully!', 'success');
         loadList(docRef.id);
         hideLoading();
@@ -1597,10 +1597,10 @@ async function loadList(listId) {
         hideLoading();
         showToast('Loading list timed out. Please try again.', 'error');
     }, 15000);
-    
+
     try {
         showLoading();
-        
+
         // Check if db is initialized (with fallback to window.db or window.firebaseDb)
         const database = db || window.db || window.firebaseDb;
         if (!database) {
@@ -1610,10 +1610,10 @@ async function loadList(listId) {
             showToast('Database connection error. Please refresh the page.', 'error');
             return;
         }
-        
+
         console.log('Loading list with ID:', listId);
         const listDoc = await database.collection('lists').doc(listId).get();
-        
+
         if (!listDoc.exists) {
             console.log('List not found:', listId);
             clearTimeout(safetyTimeout);
@@ -1621,14 +1621,14 @@ async function loadList(listId) {
             showScreen('listScreen');
             return;
         }
-        
+
         console.log('List found, processing data');
         currentList = { id: listDoc.id, ...listDoc.data() };
         currentListId = listId;
-        
+
         // Reset sort method to default (creators order) when loading a new list
         currentSortMethod = 'creators';
-        
+
         // Debug: Log the eventDate to see what format it's in
         console.log('loadList: currentList.eventDate =', currentList.eventDate);
         console.log('loadList: typeof currentList.eventDate =', typeof currentList.eventDate);
@@ -1644,22 +1644,22 @@ async function loadList(listId) {
             geminiApiKey = ''; // Clear if not present in list
             console.log('No Gemini API Key found for this list.');
         }
-        
+
         // Update URL without reloading
         const newUrl = new URL(window.location);
         newUrl.searchParams.set('list', listId);
         window.history.replaceState({}, '', newUrl);
-        
+
         displayList(currentList);
         await loadListItems(listId);
         showScreen('wishlistScreen');
-        
+
         // Show user status in console
         showUserStatus();
-        
+
         // Final permission check to ensure buttons are properly hidden for viewers
         enforceViewerPermissions();
-        
+
         // Save to viewed lists if user is accessing as viewer
         const isOwner = currentUser && currentUser.email === currentList.owner;
         const collaboratorsField = currentList.collaborators || [];
@@ -1671,12 +1671,12 @@ async function loadList(listId) {
                     : false
         );
         const canEdit = isOwner || isCollaborator;
-        
+
         // Save to viewed lists if user is not owner or collaborator (i.e., they're a viewer)
         if (currentUser && !canEdit) {
             saveViewedList(listId);
         }
-        
+
         clearTimeout(safetyTimeout);
         hideLoading();
         console.log('List loaded successfully');
@@ -1691,7 +1691,7 @@ async function loadList(listId) {
 function displayList(list) {
     document.getElementById('listTitle').textContent = list.name;
     document.getElementById('listEventDate').textContent = list.eventDate ? `Event: ${formatDate(list.eventDate)}` : '';
-    
+
     // Determine user permissions and set viewer mode if needed
     const isOwner = currentUser && currentUser.email === list.owner;
     const collaboratorsField = list.collaborators || [];
@@ -1703,7 +1703,7 @@ function displayList(list) {
                 : false
     );
     const canEdit = isOwner || isCollaborator;
-    
+
     // Auto-set viewer mode for actual viewers
     if (!canEdit && currentUser) {
         showAsViewer = true;
@@ -1713,7 +1713,7 @@ function displayList(list) {
             showAsViewerToggle.checked = true;
         }
     }
-    
+
     // Set sort select to current sort method
     const sortSelect = document.getElementById('sortSelect');
     if (sortSelect) {
@@ -1722,15 +1722,15 @@ function displayList(list) {
         console.log('Sort select not found during displayList');
     }
 
-        // Show/hide import button based on ownership and viewer mode
-        const importListBtn = document.getElementById('importListBtn');
-        if (importListBtn) {
-            if (currentUser && list.owner === currentUser.email && !showAsViewer) {
-                importListBtn.style.display = 'block';
-            } else {
-                importListBtn.style.display = 'none';
-            }
+    // Show/hide import button based on ownership and viewer mode
+    const importListBtn = document.getElementById('importListBtn');
+    if (importListBtn) {
+        if (currentUser && list.owner === currentUser.email && !showAsViewer) {
+            importListBtn.style.display = 'block';
+        } else {
+            importListBtn.style.display = 'none';
         }
+    }
 
 
 
@@ -1761,7 +1761,7 @@ function displayList(list) {
         }
         console.log('displayList - extensiveMovingToggle display:', extensiveMovingToggle.style.display, 'classList:', extensiveMovingToggle.className);
     }
-    
+
     // Show/hide viewer mode toggle for owners/collaborators (hide from actual viewers)
     const viewerModeToggle = document.getElementById('viewerModeToggle');
     console.log('displayList - canEdit:', canEdit, 'showAsViewer:', showAsViewer, 'shouldShow:', canEdit);
@@ -1804,7 +1804,7 @@ async function loadListItems(listId) {
         hideLoading();
         showToast('Loading items timed out. Please try again.', 'error');
     }, 10000);
-    
+
     try {
         // Check if db is initialized (with fallback to window.db or window.firebaseDb)
         const database = db || window.db || window.firebaseDb;
@@ -1814,18 +1814,18 @@ async function loadListItems(listId) {
             showToast('Database connection error. Please refresh the page.', 'error');
             return;
         }
-        
+
         console.log('Loading items and groups for list:', listId);
-        
+
         // Fetch both items and groups in parallel
         const [itemsSnapshot, groupsSnapshot] = await Promise.all([
             database.collection('lists').doc(listId).collection('items').orderBy('position', 'asc').get(),
             database.collection('lists').doc(listId).collection('groups').get()
         ]);
-        
+
         const items = [];
         const groups = {};
-        
+
         // Check for existing notes and prompt for deletion
         const itemsWithNotes = [];
         itemsSnapshot.forEach(doc => {
@@ -1834,15 +1834,15 @@ async function loadListItems(listId) {
             if (!itemData.comments) {
                 itemData.comments = [];
             }
-            
+
             // Check if item has notes
             if (itemData.notes && itemData.notes.trim() !== '') {
                 itemsWithNotes.push({ id: doc.id, name: itemData.name, notes: itemData.notes });
             }
-            
+
             items.push({ id: doc.id, ...itemData });
         });
-        
+
         // If there are items with notes, prompt for deletion
         if (itemsWithNotes.length > 0) {
             const shouldDeleteNotes = confirm(
@@ -1852,7 +1852,7 @@ async function loadListItems(listId) {
                 `Items with notes:\n` +
                 itemsWithNotes.map(item => `• ${item.name}`).join('\n')
             );
-            
+
             if (shouldDeleteNotes) {
                 // Delete notes from all items in database
                 const batch = db.batch();
@@ -1860,12 +1860,12 @@ async function loadListItems(listId) {
                     const itemRef = db.collection('lists').doc(listId).collection('items').doc(item.id);
                     batch.update(itemRef, { notes: firebase.firestore.FieldValue.delete() });
                 });
-                
+
                 try {
                     await batch.commit();
                     console.log(`Deleted notes from ${itemsWithNotes.length} items`);
                     showToast(`Removed secondary descriptions from ${itemsWithNotes.length} item(s)`, 'success');
-                    
+
                     // Update local items to reflect notes deletion
                     items.forEach(item => {
                         if (item.notes) {
@@ -1880,21 +1880,21 @@ async function loadListItems(listId) {
                 console.log('User chose not to delete existing notes');
             }
         }
-        
+
         groupsSnapshot.forEach(doc => {
             groups[doc.id] = { id: doc.id, ...doc.data() };
         });
-        
+
         console.log(`Loaded ${items.length} items and ${Object.keys(groups).length} groups for list ${listId}`);
-        
+
         // Store all items for filtering
         allItems = items;
-        
 
-        
+
+
         // Apply search and filters
         applySearchAndFilters();
-        
+
         setupDragAndDrop();
         clearTimeout(safetyTimeout);
     } catch (error) {
@@ -1982,12 +1982,12 @@ function displayItems(items, groups = {}) {
         moveInputEl.setAttribute('autocorrect', 'off');
         moveInputEl.setAttribute('autocapitalize', 'off');
         moveInputEl.setAttribute('spellcheck', 'false');
-        
+
         // Force input to be editable
         moveInputEl.contentEditable = 'true';
         moveInputEl.readOnly = false;
         moveInputEl.disabled = false;
-        
+
         moveBtnEl.addEventListener('click', async () => {
             const raw = moveInputEl.value.trim();
             if (!raw) {
@@ -2004,31 +2004,31 @@ function displayItems(items, groups = {}) {
                 showToast('Error moving selected items: ' + (err.message || err), 'error');
             }
         });
-        
+
         moveInputEl.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 moveBtnEl.click();
             }
         });
-        
+
         // Add focus event to ensure input is properly focused when clicked
-        moveInputEl.addEventListener('focus', function() {
+        moveInputEl.addEventListener('focus', function () {
             this.style.borderColor = 'rgba(255, 255, 255, 0.6)';
             this.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
             console.log('Move to position input focused');
         });
-        
-        moveInputEl.addEventListener('blur', function() {
+
+        moveInputEl.addEventListener('blur', function () {
             this.style.borderColor = 'rgba(255, 255, 255, 0.3)';
             this.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
         });
-        
+
         // Add input event to verify typing works
-        moveInputEl.addEventListener('input', function() {
+        moveInputEl.addEventListener('input', function () {
             console.log('Move to position input value:', this.value);
         });
-        
+
         // Debug: Log input element properties
         console.log('Move to position input element:', moveInputEl);
         console.log('Input type:', moveInputEl.type);
@@ -2047,10 +2047,10 @@ function displayItems(items, groups = {}) {
         if (item.conditionalVisibility && item.triggerItemId) {
             const triggerItem = items.find(it => it.id === item.triggerItemId);
             const isTriggerBought = !!(triggerItem && triggerItem.bought);
-            
+
             // Debug logging
             console.log('Processing reliant item:', item.name, 'trigger:', triggerItem?.name, 'trigger bought:', isTriggerBought);
-            
+
             // Check if user is owner or collaborator
             const isOwner = currentUser && currentUser.email === currentList.owner;
             const collaboratorsField = currentList.collaborators || [];
@@ -2062,20 +2062,20 @@ function displayItems(items, groups = {}) {
                         : false
             );
             const canEdit = isOwner || isCollaborator;
-            
+
             console.log('User permissions - canEdit:', canEdit, 'currentUser:', currentUser?.email);
-            
+
             // For viewers: hide until trigger is bought
             if (!canEdit && !isTriggerBought) {
                 console.log('Hiding reliant item for viewer - trigger not bought');
                 return;
             }
-            
+
             console.log('Showing reliant item');
-            
+
             // Store trigger status for styling
             item._triggerBought = isTriggerBought;
-            
+
             // Add to reliant items mapping instead of ungroupedItems
             if (!reliantItems[item.triggerItemId]) {
                 reliantItems[item.triggerItemId] = [];
@@ -2083,10 +2083,10 @@ function displayItems(items, groups = {}) {
             reliantItems[item.triggerItemId].push(item);
             return; // Don't add to ungroupedItems
         }
-        
+
         // Apply bought toggle filter only to non-reliant items
         if (!showBoughtItems && item.bought) return; // respect bought toggle
-        
+
         const gid = item.groupId || '';
         if (!gid) {
             ungroupedItems.push(item);
@@ -2095,7 +2095,7 @@ function displayItems(items, groups = {}) {
             itemsByGroup[gid].push(item);
         }
     });
-    
+
     // Sort items within each group
     Object.keys(itemsByGroup).forEach(gid => {
         itemsByGroup[gid] = sortItems(itemsByGroup[gid], groups);
@@ -2141,7 +2141,7 @@ function displayItems(items, groups = {}) {
         const groupContainer = document.createElement('div');
         groupContainer.className = 'group-container';
         groupContainer.dataset.groupId = groupId;
-        
+
         // Assign the group a display number from the shared sequence (just like an item gets one)
         const displayNo = displayCounter++;
         groupDisplayIndex[groupId] = displayNo;
@@ -2159,19 +2159,19 @@ function displayItems(items, groups = {}) {
         const canEdit = isOwner || isCollaborator;
         const effectiveCanEdit = canEdit && !showAsViewer;
 
-    // Group header
-    const header = document.createElement('div');
-    header.className = 'group-header';
-    const groupName = group.name || 'Untitled Group';
-    const groupDescription = group.description || '';
+        // Group header
+        const header = document.createElement('div');
+        header.className = 'group-header';
+        const groupName = group.name || 'Untitled Group';
+        const groupDescription = group.description || '';
 
-    // Create collapse toggle button (defined before insertion/use)
-    const collapseToggle = document.createElement('button');
-    collapseToggle.className = 'icon-button group-collapse-toggle';
-    collapseToggle.title = 'Toggle group items visibility';
-    collapseToggle.innerHTML = `<span class="material-icons">expand_more</span>`;
-        
-            header.innerHTML = `
+        // Create collapse toggle button (defined before insertion/use)
+        const collapseToggle = document.createElement('button');
+        collapseToggle.className = 'icon-button group-collapse-toggle';
+        collapseToggle.title = 'Toggle group items visibility';
+        collapseToggle.innerHTML = `<span class="material-icons">expand_more</span>`;
+
+        header.innerHTML = `
                 <div class="group-header-left">
                     <h3 class="group-title"><span class="group-number">${groupContainer.dataset.groupDisplayNumber}.</span> ${escapeHtml(groupName)} ${group.imageUrl ? `<img src="${group.imageUrl}" alt="${escapeHtml(group.name || 'Group')}" class="group-image-inline" onerror="this.style.display='none'">` : ''}</h3>
                     ${groupDescription ? `<p class="group-description">${escapeHtml(groupDescription)}</p>` : ''}
@@ -2193,17 +2193,17 @@ function displayItems(items, groups = {}) {
                     </button>
                 </div>
             `;
-            groupContainer.appendChild(header);
-        
-            // Insert collapse toggle at the start of the left area so it flows naturally
-            const leftArea = header.querySelector('.group-header-left') || header;
-            leftArea.insertAdjacentElement('afterbegin', collapseToggle);
+        groupContainer.appendChild(header);
+
+        // Insert collapse toggle at the start of the left area so it flows naturally
+        const leftArea = header.querySelector('.group-header-left') || header;
+        leftArea.insertAdjacentElement('afterbegin', collapseToggle);
 
         // Create items container that can be collapsed
         const itemsContainer = document.createElement('div');
         itemsContainer.className = 'group-items-container';
         itemsContainer.dataset.groupId = groupId;
-        
+
         // Check if this group was previously collapsed and restore that state
         const collapsedGroups = JSON.parse(localStorage.getItem('collapsedGroups') || '{}');
         const isCollapsed = collapsedGroups[currentListId]?.[groupId] || false;
@@ -2212,18 +2212,18 @@ function displayItems(items, groups = {}) {
             collapseToggle.innerHTML = `<span class="material-icons">expand_less</span>`;
             collapseToggle.title = 'Expand group items';
         }
-        
+
         // Add collapse toggle event listener
         collapseToggle.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
             itemsContainer.classList.toggle('collapsed');
             const icon = collapseToggle.querySelector('.material-icons');
-            
+
             // Persist collapse state to localStorage
             const collapsedGroups = JSON.parse(localStorage.getItem('collapsedGroups') || '{}');
             if (!collapsedGroups[currentListId]) collapsedGroups[currentListId] = {};
-            
+
             if (itemsContainer.classList.contains('collapsed')) {
                 icon.textContent = 'expand_less';
                 collapseToggle.title = 'Expand group items';
@@ -2238,7 +2238,7 @@ function displayItems(items, groups = {}) {
 
         // Sort items within groups
         const sortedGroupItems = sortItems(groupItems, groups);
-        
+
         // Group items use composite numbering (group#.item#, e.g., "2.1" if group is #2)
         sortedGroupItems.forEach((item, idx) => {
             const compositeLabel = `${groupDisplayIndex[groupId]}.${idx + 1}`;
@@ -2253,7 +2253,7 @@ function displayItems(items, groups = {}) {
 
     // Sort ungrouped items
     const sortedUngroupedItems = sortItems(ungroupedItems, groups);
-    
+
     // Render ungrouped items first; attach any reliant items and groups triggered by each item directly after
     if (sortedUngroupedItems.length > 0) {
         sortedUngroupedItems.forEach((item) => {
@@ -2267,7 +2267,7 @@ function displayItems(items, groups = {}) {
             sortedReliants.forEach(reliantItem => {
                 const reliantLabel = String(displayCounter++);
                 const reliantCard = createItemCard(reliantItem, reliantLabel);
-                
+
                 // Add indentation and styling for reliant items
                 reliantCard.classList.add('reliant-item');
                 if (reliantItem._triggerBought) {
@@ -2275,7 +2275,7 @@ function displayItems(items, groups = {}) {
                 } else {
                     reliantCard.classList.add('reliant-trigger-pending');
                 }
-                
+
                 container.appendChild(reliantCard);
             });
 
@@ -2306,7 +2306,7 @@ function displayItems(items, groups = {}) {
 function handleSortChange() {
     const sortSelect = document.getElementById('sortSelect');
     currentSortMethod = sortSelect.value;
-    
+
     // Reload and re-sort items (without persisting to database)
     loadListItems(currentListId);
 }
@@ -2329,7 +2329,7 @@ function clearSearch() {
 function toggleFilterPanel() {
     const filterPanel = document.getElementById('filterPanel');
     const filterBackdrop = document.getElementById('filterBackdrop');
-    
+
     if (filterPanel.classList.contains('hidden')) {
         filterPanel.classList.remove('hidden');
         filterBackdrop.classList.add('show');
@@ -2342,7 +2342,7 @@ function toggleFilterPanel() {
 function handlePriceInput() {
     const minPrice = document.getElementById('minPriceInput').value;
     const maxPrice = document.getElementById('maxPriceInput').value;
-    
+
     activeFilters.minPrice = minPrice ? parseFloat(minPrice) : null;
     activeFilters.maxPrice = maxPrice ? parseFloat(maxPrice) : null;
 }
@@ -2355,7 +2355,7 @@ function handleStatusFilter() {
 function applyFilters() {
     handlePriceInput();
     handleStatusFilter();
-    
+
     updateActiveFiltersCount();
     applySearchAndFilters();
     toggleFilterPanel(); // Close filter panel after applying
@@ -2370,17 +2370,17 @@ function clearAllFilters() {
         showBought: false,
         categories: []
     };
-    
+
     // Reset UI
     document.getElementById('minPriceInput').value = '';
     document.getElementById('maxPriceInput').value = '';
     document.getElementById('filterAvailable').checked = true;
     document.getElementById('filterBought').checked = false;
-    
+
     // Clear category checkboxes
     const categoryCheckboxes = document.querySelectorAll('#categoryFilters input[type="checkbox"]');
     categoryCheckboxes.forEach(cb => cb.checked = false);
-    
+
     updateActiveFiltersCount();
     applySearchAndFilters();
 }
@@ -2391,7 +2391,7 @@ function updateActiveFiltersCount() {
     if (activeFilters.maxPrice !== null) count++;
     if (!activeFilters.showAvailable) count++;
     if (activeFilters.showBought) count++;
-    
+
     const countElement = document.getElementById('activeFiltersCount');
     if (count > 0) {
         countElement.textContent = count;
@@ -2403,9 +2403,9 @@ function updateActiveFiltersCount() {
 
 function applySearchAndFilters() {
     if (!allItems || allItems.length === 0) return;
-    
+
     let filteredItems = [...allItems];
-    
+
     // Apply search query
     if (searchQuery) {
         filteredItems = filteredItems.filter(item => {
@@ -2413,7 +2413,7 @@ function applySearchAndFilters() {
             return searchText.includes(searchQuery);
         });
     }
-    
+
     // Apply price filter
     if (activeFilters.minPrice !== null) {
         filteredItems = filteredItems.filter(item => {
@@ -2421,23 +2421,23 @@ function applySearchAndFilters() {
             return price >= activeFilters.minPrice;
         });
     }
-    
+
     if (activeFilters.maxPrice !== null) {
         filteredItems = filteredItems.filter(item => {
             const price = parseFloat(item.price) || 0;
             return price <= activeFilters.maxPrice;
         });
     }
-    
+
     // Apply purchase status filter
     filteredItems = filteredItems.filter(item => {
         if (item.bought && activeFilters.showBought) return true;
         if (!item.bought && activeFilters.showAvailable) return true;
         return false;
     });
-    
 
-    
+
+
     // Apply sorting and display
     const sortedItems = sortItems(filteredItems, {});
     displayItems(sortedItems, {});
@@ -2448,9 +2448,9 @@ function sortItems(items, groups = {}) {
     if (currentSortMethod === 'creators') {
         return items.sort((a, b) => (a.position || 0) - (b.position || 0));
     }
-    
+
     let sortedItems = [...items];
-    
+
     switch (currentSortMethod) {
         case 'price-high':
             sortedItems.sort((a, b) => {
@@ -2459,7 +2459,7 @@ function sortItems(items, groups = {}) {
                 return priceB - priceA; // High to low
             });
             break;
-            
+
         case 'price-low':
             sortedItems.sort((a, b) => {
                 const priceA = parseFloat(a.price) || 0;
@@ -2467,7 +2467,7 @@ function sortItems(items, groups = {}) {
                 return priceA - priceB; // Low to high
             });
             break;
-            
+
         case 'alphabetical':
             sortedItems.sort((a, b) => {
                 const nameA = (a.name || '').toLowerCase();
@@ -2475,13 +2475,13 @@ function sortItems(items, groups = {}) {
                 return nameA.localeCompare(nameB);
             });
             break;
-            
+
         default:
             // Default to creator's order
             sortedItems.sort((a, b) => (a.position || 0) - (b.position || 0));
             break;
     }
-    
+
     return sortedItems;
 }
 
@@ -2557,8 +2557,8 @@ async function persistDomOrder(container) {
 
         // Build writes: items get positions 1..N in sequence
         const itemUpdates = itemsSequence.map((id, idx) => ({ id, position: idx + 1 }));
-        const groupUpdates = groupIds.map(gid => ({ 
-            id: gid, 
+        const groupUpdates = groupIds.map(gid => ({
+            id: gid,
             position: groupSequenceNumbers[gid],
             displayOrder: groupSequenceNumbers[gid]
         }));
@@ -2632,7 +2632,7 @@ function createItemCard(item, position) {
     const card = document.createElement('div');
     card.className = `item-card ${item.bought ? 'bought' : ''} ${selectedItems.includes(item.id) ? 'selected' : ''}`;
     card.dataset.itemId = item.id;
-    
+
     const isOwner = currentUser && currentUser.email === currentList.owner;
     const collaboratorsField = currentList.collaborators || [];
     const isCollaborator = currentUser && (
@@ -2644,7 +2644,7 @@ function createItemCard(item, position) {
     );
     const canEdit = isOwner || isCollaborator;
     const effectiveCanEdit = canEdit && !showAsViewer;
-    
+
     // Check if user is a viewer (not owner, not collaborator, but has access)
     const viewersField = currentList.viewers || [];
     const isExplicitViewer = currentUser && !isOwner && !isCollaborator && (
@@ -2658,10 +2658,10 @@ function createItemCard(item, position) {
     const isViewerViaShare = currentListRole === 'viewer';
     // Any authenticated user can add comments
     const canAddComments = currentUser;
-    
+
     // Show comments if showBoughtItems is on OR showAsViewer is on
     const shouldShowComments = showBoughtItems || showAsViewer;
-    
+
     // Show gray line only if there are actual comments to display
     const hasComments = item.comments && Array.isArray(item.comments) && item.comments.length > 0;
     const shouldShowGrayLine = shouldShowComments && hasComments;
@@ -2683,7 +2683,7 @@ function createItemCard(item, position) {
     // Create content wrapper
     const contentWrapper = document.createElement('div');
     contentWrapper.className = 'item-content-wrapper';
-    
+
     // Add click event listener to handle selection and show info modal
     contentWrapper.addEventListener('click', (e) => {
         // Don't trigger if clicking on a button, link, or comments section
@@ -2695,7 +2695,7 @@ function createItemCard(item, position) {
             }
         }
     });
-    
+
     const showPosition = !currentList || currentList.ordered !== false;
     contentWrapper.innerHTML = `
         <div class="item-position" style="${showPosition ? '' : 'display:none;'}">${position}</div>
@@ -2723,6 +2723,9 @@ function createItemCard(item, position) {
                 ${effectiveCanEdit ? `
                     <button class="icon-button" onclick="summarizeItem('${item.id}')" title="AI Summarize">
                         <span class="material-icons">psychology</span>
+                    </button>
+                    <button class="icon-button" onclick="checkItemPrice('${item.id}')" title="Check Price & Availability">
+                        <span class="material-icons">price_check</span>
                     </button>
                 ` : ''}
                 ${!item.bought ? `
@@ -2761,6 +2764,9 @@ function createItemCard(item, position) {
                 <img src="${item.imageUrl}" alt="${escapeHtml(item.name)}" class="item-image" 
                      onerror="this.style.display='none'">
             ` : ''}
+            ${item.availability && (item.availability.toLowerCase().includes('out of stock') || item.availability.toLowerCase().includes('unavailable') || item.availability.toLowerCase().includes('sold out')) ? `
+                <div class="out-of-stock-badge">Out of Stock</div>
+            ` : ''}
             <div class="item-details">
                 ${item.description ? `
                     <p class="item-description">${escapeHtml(item.description)}</p>
@@ -2768,6 +2774,17 @@ function createItemCard(item, position) {
 
                 <div class="item-meta">
                     ${item.price ? `<span class="item-price">$${item.price}</span>` : ''}
+                    ${item.availability ? `
+                        <span class="item-availability ${item.availability.toLowerCase().includes('out of stock') || item.availability.toLowerCase().includes('unavailable') ? 'out-of-stock' : 'in-stock'}">
+                            ${escapeHtml(item.availability)}
+                        </span>
+                    ` : ''}
+                    ${item.lastPriceCheck ? `
+                        <span class="last-price-check" title="Last checked">
+                            <span class="material-icons" style="font-size: 12px; vertical-align: middle;">update</span>
+                            ${formatDate(item.lastPriceCheck)}
+                        </span>
+                    ` : ''}
                     ${item.bought && item.buyerName ? `
                         <span>Bought by: ${escapeHtml(item.buyerName)}</span>
                     ` : ''}
@@ -2801,27 +2818,27 @@ function createItemCard(item, position) {
                     <h4>Comments</h4>
                     <div id="comments-list-${item.id}" class="comments-list">
                         ${item.comments
-                            .filter(comment => comment && comment.text) // Filter out invalid comments
-                            .sort((a, b) => {
-                                // Sort by timestamp (newest first)
-                                const timeA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp).getTime()) : 0;
-                                const timeB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime()) : 0;
-                                return timeB - timeA;
-                            })
-                            .map((comment, index) => {
-                                const isOwnComment = currentUser && comment.authorEmail === currentUser.email;
-                                const commentId = comment.id || `comment-${index}`;
-                                return `
+                    .filter(comment => comment && comment.text) // Filter out invalid comments
+                    .sort((a, b) => {
+                        // Sort by timestamp (newest first)
+                        const timeA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate().getTime() : new Date(a.timestamp).getTime()) : 0;
+                        const timeB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate().getTime() : new Date(b.timestamp).getTime()) : 0;
+                        return timeB - timeA;
+                    })
+                    .map((comment, index) => {
+                        const isOwnComment = currentUser && comment.authorEmail === currentUser.email;
+                        const commentId = comment.id || `comment-${index}`;
+                        return `
                                 <div class="comment" data-comment-id="${commentId}" data-comment-index="${index}" data-author-email="${comment.authorEmail || ''}">
                                     <div class="comment-header">
                                         <div class="comment-author">
                                             ${escapeHtml(comment.authorName || 'Anonymous')}
-                                            ${comment.authorName && comment.authorEmail && comment.authorName !== comment.authorEmail ? 
-                                                `<span style="font-size: 0.875rem; color: var(--text-secondary); margin-left: 4px;">(${escapeHtml(comment.authorEmail)})</span>` : 
-                                                comment.authorEmail ? 
-                                                    `<span style="font-size: 0.875rem; color: var(--text-secondary); margin-left: 4px;">(${escapeHtml(comment.authorEmail)})</span>` : 
-                                                    ''
-                                            }
+                                            ${comment.authorName && comment.authorEmail && comment.authorName !== comment.authorEmail ?
+                                `<span style="font-size: 0.875rem; color: var(--text-secondary); margin-left: 4px;">(${escapeHtml(comment.authorEmail)})</span>` :
+                                comment.authorEmail ?
+                                    `<span style="font-size: 0.875rem; color: var(--text-secondary); margin-left: 4px;">(${escapeHtml(comment.authorEmail)})</span>` :
+                                    ''
+                            }
                                         </div>
                                         ${isOwnComment ? `
                                             <div class="comment-actions">
@@ -2856,11 +2873,11 @@ function createItemCard(item, position) {
             </div>
         ` : ''}
     `;
-    
+
     // Append elements to card
     card.appendChild(checkbox);
     card.appendChild(contentWrapper);
-    
+
     return card;
 }
 
@@ -2963,21 +2980,21 @@ function handleItemSelection(itemId, ctrlKey, shiftKey) {
     // Get all visible item IDs in order
     const visibleItemIds = Array.from(document.querySelectorAll('.item-card'))
         .map(card => card.dataset.itemId);
-    
+
     if (shiftKey && lastSelectedItemId) {
         // Shift key: select range of items
         const currentIndex = visibleItemIds.indexOf(itemId);
         const lastIndex = visibleItemIds.indexOf(lastSelectedItemId);
-        
+
         if (currentIndex !== -1 && lastIndex !== -1) {
             const start = Math.min(currentIndex, lastIndex);
             const end = Math.max(currentIndex, lastIndex);
-            
+
             // Clear selection if not holding Ctrl key
             if (!ctrlKey) {
                 selectedItems = [];
             }
-            
+
             // Add all items in range to selection
             for (let i = start; i <= end; i++) {
                 if (!selectedItems.includes(visibleItemIds[i])) {
@@ -3006,10 +3023,10 @@ function handleItemSelection(itemId, ctrlKey, shiftKey) {
             selectedItems = [itemId];
         }
     }
-    
+
     // Update last selected item
     lastSelectedItemId = itemId;
-    
+
     // Update UI to reflect selection state
     updateSelectionUI();
     updateSelectionActionBar();
@@ -3020,14 +3037,14 @@ function updateSelectionUI() {
     document.querySelectorAll('.item-card').forEach(card => {
         const itemId = card.dataset.itemId;
         const isSelected = selectedItems.includes(itemId);
-        
+
         // Update card class
         if (isSelected) {
             card.classList.add('selected');
         } else {
             card.classList.remove('selected');
         }
-        
+
         // Update checkbox
         const checkbox = card.querySelector('input[type="checkbox"]');
         if (checkbox) {
@@ -3039,7 +3056,7 @@ function updateSelectionUI() {
 function updateSelectionActionBar() {
     const actionBar = document.getElementById('selectionActionBar');
     if (!actionBar) return;
-    
+
     if (selectedItems.length > 0) {
         actionBar.classList.remove('hidden');
         document.getElementById('selectedItemsCount').textContent = selectedItems.length;
@@ -3057,7 +3074,7 @@ function deselectAllItems() {
 
 async function deleteSelectedItems() {
     if (selectedItems.length === 0) return;
-    
+
     const isOwner = currentUser && currentUser.email === currentList.owner;
     const collaboratorsField = currentList.collaborators || [];
     const isCollaborator = currentUser && (
@@ -3068,29 +3085,29 @@ async function deleteSelectedItems() {
                 : false
     );
     const canEdit = isOwner || isCollaborator;
-    
+
     if (!canEdit) {
         showToast('You don\'t have permission to delete items', 'error');
         return;
     }
-    
+
     if (!confirm(`Are you sure you want to delete ${selectedItems.length} selected item(s)?`)) {
         return;
     }
-    
+
     showLoading();
-    
+
     try {
         const batch = db.batch();
         const itemsRef = db.collection('lists').doc(currentListId).collection('items');
-        
+
         selectedItems.forEach(itemId => {
             batch.delete(itemsRef.doc(itemId));
         });
-        
+
         await batch.commit();
         showToast(`${selectedItems.length} item(s) deleted successfully`, 'success');
-        
+
         // Clear selection and reload items
         selectedItems = [];
         lastSelectedItemId = null;
@@ -3210,7 +3227,7 @@ async function moveSelectedItemsToPosition(rawPosition) {
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
         });
-        
+
         console.log('Committing batch updates...');
         await batch.commit();
         console.log('Batch commit completed');
@@ -3221,7 +3238,7 @@ async function moveSelectedItemsToPosition(rawPosition) {
             selectedOrdered: selectedOrdered.map(it => ({ id: it.id, name: it.name, oldPosition: it.position })),
             newOrder: newOrder.map((it, idx) => ({ id: it.id, name: it.name, newPosition: idx + 1 }))
         };
-        
+
         console.log('Move completed:', moveDetails);
 
         // Show more detailed success message
@@ -3232,10 +3249,10 @@ async function moveSelectedItemsToPosition(rawPosition) {
         lastSelectedItemId = null;
         updateSelectionUI();
         updateSelectionActionBar();
-        
+
         // Reload items to reflect new order
         await loadListItems(currentListId);
-        
+
         // Force UI update to ensure selection bar is hidden
         setTimeout(() => {
             updateSelectionActionBar();
@@ -3297,7 +3314,7 @@ async function moveGroupToPosition(groupId, rawPosition) {
             // Filter to only visible items
             const visibleItems = allItems.filter(it => !it.bought || showBoughtItems);
             const targetVisibleIdx = Math.max(0, baseAbsolute - 1);
-            
+
             // Find the corresponding item in the full list
             const targetItem = visibleItems[targetVisibleIdx];
             if (targetItem) {
@@ -3342,7 +3359,7 @@ async function moveGroupToPosition(groupId, rawPosition) {
         const groupsInOrder = Array.from(groupDocs.docs)
             .map(doc => ({ id: doc.id, ...doc.data() }))
             .sort((a, b) => a.position - b.position);
-        
+
         groupsInOrder.forEach((group, idx) => {
             groupsBatch.update(groupsRef.doc(group.id), {
                 displayOrder: idx + 1,
@@ -3436,7 +3453,7 @@ async function moveItemToPosition(itemId, targetPosition) {
     showLoading();
     try {
         const itemsRef = db.collection('lists').doc(currentListId).collection('items');
-        
+
         // Fetch current ordering
         const snap = await itemsRef.orderBy('position', 'asc').get();
         const allItems = [];
@@ -3501,11 +3518,11 @@ function setupDragAndDrop() {
     const effectiveCanEdit = canEdit && !showAsViewer;
 
     if (!effectiveCanEdit) return;
-    
+
     // Track auto-scroll state
     let autoScrollInterval = null;
     let scrollSpeed = 0;
-    
+
     new Sortable(container, {
         handle: '.drag-handle, .group-drag-handle',
         animation: 150,
@@ -3516,13 +3533,13 @@ function setupDragAndDrop() {
         scroll: document.documentElement, // Scroll the entire page/window
         scrollSpeed: 20, // Fast scroll speed
         scrollSensitivity: 100, // Trigger scroll when cursor is 100px from edge
-        onEnd: async function(evt) {
+        onEnd: async function (evt) {
             // After any drag end (item or group), rebuild the visible item ID order and persist positions
             try {
                 const visibleIds = [];
                 const groupPositions = new Map();
                 let sequenceNumber = 1;
-                
+
                 // Walk through children in container order; expand groups into their item ids
                 // Assign sequential numbers to both items and groups as they appear
                 Array.from(container.children).forEach(child => {
@@ -3624,7 +3641,7 @@ function showAddItemModal() {
     document.getElementById('itemModalTitle').textContent = 'Add Item';
     document.getElementById('itemForm').reset();
     document.getElementById('itemForm').dataset.mode = 'add';
-    
+
     // Clear description field
     document.getElementById('itemName').value = '';
     document.getElementById('itemDescription').value = '';
@@ -3644,7 +3661,7 @@ function showAddItemModal() {
     // URL validation function
     const validateUrlInput = () => {
         const url = itemUrlInput.value.trim();
-        
+
         if (!url) {
             // Empty URL is valid (optional field)
             urlValidationMessage.textContent = '';
@@ -3652,14 +3669,14 @@ function showAddItemModal() {
             itemUrlInput.classList.remove('invalid', 'valid');
             return;
         }
-        
+
         const validatedUrl = validateAndFormatUrl(url);
-        
+
         if (validatedUrl) {
             // Valid URL
             const protocol = validatedUrl.split(':')[0] + ':';
             let message = '✓ Valid URL';
-            
+
             // Add protocol-specific messages
             if (protocol === 'mailto:') {
                 message = '✓ Valid email address';
@@ -3672,12 +3689,12 @@ function showAddItemModal() {
             } else {
                 message = `✓ Valid ${protocol} URI`;
             }
-            
+
             urlValidationMessage.textContent = message;
             urlValidationMessage.className = 'validation-message success';
             itemUrlInput.classList.remove('invalid');
             itemUrlInput.classList.add('valid');
-            
+
             // Update the input with the formatted URL
             if (validatedUrl !== url) {
                 itemUrlInput.value = validatedUrl;
@@ -3699,7 +3716,7 @@ function showAddItemModal() {
             if (itemName) {
                 showLoading();
                 const { generatedName, description } = await summarizeItemName(itemName);
-                
+
                 document.getElementById('itemName').value = generatedName;
                 document.getElementById('itemDescription').value = description;
                 hideLoading();
@@ -3724,7 +3741,7 @@ function showAddItemModal() {
     itemUrlInput.addEventListener('blur', itemUrlInput._handleUrlInputEvent);
 
     showModal('itemModal');
-    
+
 
 }
 
@@ -3737,19 +3754,19 @@ function setupItemConditionalVisibility() {
     populateItemSelectorForConditional();
 
     // Handle conditional visibility checkbox change
-    conditionalCheckbox.addEventListener('change', function() {
+    conditionalCheckbox.addEventListener('change', function () {
         reliantOptions.style.display = this.checked ? 'block' : 'none';
     });
 }
 
 function populateItemSelectorForConditional() {
     const reliantSelector = document.getElementById('itemTriggerItem');
-    
+
     if (!reliantSelector || !currentListId) return;
-    
+
     // Clear existing options
     reliantSelector.innerHTML = '<option value="">Select an item...</option>';
-    
+
     // Fetch items from Firestore
     db.collection('lists').doc(currentListId).collection('items')
         .orderBy('position')
@@ -3785,7 +3802,7 @@ function showAddGroupModal() {
         // Initialize visibility
         conditionalItemSelector.style.display = conditionalCheckbox.checked ? 'block' : 'none';
         // Set up change handler (replace previous to avoid duplicates)
-        conditionalCheckbox.onchange = function() {
+        conditionalCheckbox.onchange = function () {
             if (this.checked) {
                 conditionalItemSelector.style.display = 'block';
                 populateItemSelector();
@@ -3896,7 +3913,7 @@ async function saveGroup() {
 function editItem(itemId) {
     // Find item in current list and load it into the edit modal
     const itemsRef = db.collection('lists').doc(currentListId).collection('items');
-    
+
     itemsRef.doc(itemId).get()
         .then(doc => {
             if (doc.exists) {
@@ -3904,10 +3921,10 @@ function editItem(itemId) {
                 // Set the form to edit mode and store the item ID
                 document.getElementById('itemForm').dataset.mode = 'edit';
                 document.getElementById('itemForm').dataset.itemId = itemId;
-                
+
                 // Set modal title
                 document.getElementById('itemModalTitle').textContent = 'Edit Item';
-                
+
                 // Populate form fields
                 document.getElementById('itemName').value = item.name || '';
                 document.getElementById('itemURL').value = item.url || '';
@@ -3916,27 +3933,27 @@ function editItem(itemId) {
 
                 document.getElementById('itemPrice').value = item.price || '';
                 document.getElementById('itemPosition').value = item.position || '';
-                
+
                 // Add URL validation for edit mode
                 const itemUrlInput = document.getElementById('itemURL');
                 const urlValidationMessage = document.getElementById('urlValidationMessage');
-                
+
                 const validateUrlInput = () => {
                     const url = itemUrlInput.value.trim();
-                    
+
                     if (!url) {
                         urlValidationMessage.textContent = '';
                         urlValidationMessage.className = 'validation-message';
                         itemUrlInput.classList.remove('invalid', 'valid');
                         return;
                     }
-                    
+
                     const validatedUrl = validateAndFormatUrl(url);
-                    
+
                     if (validatedUrl) {
                         const protocol = validatedUrl.split(':')[0] + ':';
                         let message = '✓ Valid URI';
-                        
+
                         if (protocol === 'mailto:') {
                             message = '✓ Valid email address';
                         } else if (protocol === 'tel:') {
@@ -3948,12 +3965,12 @@ function editItem(itemId) {
                         } else {
                             message = `✓ Valid ${protocol} URI`;
                         }
-                        
+
                         urlValidationMessage.textContent = message;
                         urlValidationMessage.className = 'validation-message success';
                         itemUrlInput.classList.remove('invalid');
                         itemUrlInput.classList.add('valid');
-                        
+
                         if (validatedUrl !== url) {
                             itemUrlInput.value = validatedUrl;
                         }
@@ -3964,20 +3981,20 @@ function editItem(itemId) {
                         itemUrlInput.classList.add('invalid');
                     }
                 };
-                
+
                 // Remove existing listeners and add new ones
                 itemUrlInput.removeEventListener('input', itemUrlInput._handleUrlInputEvent);
                 itemUrlInput.removeEventListener('blur', itemUrlInput._handleUrlInputEvent);
                 itemUrlInput._handleUrlInputEvent = validateUrlInput;
                 itemUrlInput.addEventListener('input', itemUrlInput._handleUrlInputEvent);
                 itemUrlInput.addEventListener('blur', itemUrlInput._handleUrlInputEvent);
-                
+
                 // Initial validation
                 validateUrlInput();
-                
+
                 // Show the modal first
                 showModal('itemModal');
-                
+
 
             } else {
                 showToast('Item not found', 'error');
@@ -4009,7 +4026,7 @@ function showItemInfo(itemId) {
 
 function openItemLink(url) {
     if (!url) return;
-    
+
     // Handle different protocols appropriately
     if (url.startsWith('mailto:')) {
         window.location.href = url;
@@ -4095,14 +4112,14 @@ async function performBuy(itemId, buyerName, buyerEmail, buyerNote) {
         // First, get the item to check its group
         const itemDoc = await db.collection('lists').doc(currentListId)
             .collection('items').doc(itemId).get();
-        
+
         if (!itemDoc.exists) {
             showToast('Item not found', 'error');
             return;
         }
-        
+
         const item = itemDoc.data();
-        
+
         // Mark the current item as bought
         await db.collection('lists').doc(currentListId)
             .collection('items').doc(itemId).update({
@@ -4112,12 +4129,12 @@ async function performBuy(itemId, buyerName, buyerEmail, buyerNote) {
                 buyerNote: buyerNote,
                 datePurchased: firebase.firestore.FieldValue.serverTimestamp()
             });
-        
+
         // Check if item belongs to a group with auto-buy enabled
         if (item.groupId) {
             const groupDoc = await db.collection('lists').doc(currentListId)
                 .collection('groups').doc(item.groupId).get();
-            
+
             if (groupDoc.exists && groupDoc.data().autoBuy) {
                 // Get all items in this group that are not yet bought
                 const groupItemsSnapshot = await db.collection('lists').doc(currentListId)
@@ -4125,7 +4142,7 @@ async function performBuy(itemId, buyerName, buyerEmail, buyerNote) {
                     .where('groupId', '==', item.groupId)
                     .where('bought', '==', false)
                     .get();
-                
+
                 // Mark all other items in the group as bought
                 const batch = firebase.firestore().batch();
                 groupItemsSnapshot.forEach(doc => {
@@ -4141,21 +4158,21 @@ async function performBuy(itemId, buyerName, buyerEmail, buyerNote) {
                         });
                     }
                 });
-                
+
                 if (!groupItemsSnapshot.empty) {
                     await batch.commit();
                     showToast(`Item and ${groupItemsSnapshot.size - 1} other group items marked as bought!`, 'success');
                 } else {
                     showToast('Item marked as bought!', 'success');
                 }
-                
+
             } else {
                 showToast('Item marked as bought!', 'success');
             }
         } else {
             showToast('Item marked as bought!', 'success');
         }
-        
+
         loadListItems(currentListId);
     } catch (error) {
         showToast('Error marking item as bought: ' + error.message, 'error');
@@ -4167,7 +4184,7 @@ async function markAsNotBought(itemId) {
     if (!confirm('Are you sure you want to mark this item as not bought? This will remove all purchase information.')) {
         return;
     }
-    
+
     try {
         await db.collection('lists').doc(currentListId)
             .collection('items').doc(itemId).update({
@@ -4177,7 +4194,7 @@ async function markAsNotBought(itemId) {
                 buyerNote: firebase.firestore.FieldValue.delete(),
                 datePurchased: firebase.firestore.FieldValue.delete()
             });
-        
+
         showToast('Item marked as not bought!', 'success');
         loadListItems(currentListId);
     } catch (error) {
@@ -4189,7 +4206,7 @@ async function unmarkAsBought(itemId) {
     if (!confirm('Are you sure you want to unmark this item as bought? This will erase all purchase data and cannot be undone.')) {
         return;
     }
-    
+
     try {
         await db.collection('lists').doc(currentListId)
             .collection('items').doc(itemId).update({
@@ -4199,7 +4216,7 @@ async function unmarkAsBought(itemId) {
                 buyerNote: firebase.firestore.FieldValue.delete(),
                 datePurchased: firebase.firestore.FieldValue.delete()
             });
-        
+
         showToast('Item unmarked as bought - purchase data erased!', 'success');
         loadListItems(currentListId);
     } catch (error) {
@@ -4212,17 +4229,17 @@ async function addComment(itemId) {
         showToast('Please log in to add comments', 'error');
         return;
     }
-    
+
     if (!currentListId) {
         showToast('No list selected', 'error');
         return;
     }
-    
+
     if (!currentList) {
         showToast('List data not loaded', 'error');
         return;
     }
-    
+
     // Check if user is a viewer (not owner, not collaborator)
     const isOwner = currentUser.email === currentList.owner;
     const collaboratorsField = currentList.collaborators || [];
@@ -4231,36 +4248,36 @@ async function addComment(itemId) {
         : typeof collaboratorsField === 'object' && collaboratorsField !== null
             ? Object.values(collaboratorsField).includes(currentUser.email)
             : false;
-    
 
-    
+
+
     const commentInput = document.getElementById(`comment-input-${itemId}`);
     if (!commentInput) {
         showToast('Comment input not found', 'error');
         return;
     }
-    
+
     const commentText = commentInput.value.trim();
     if (!commentText) {
         showToast('Please enter a comment', 'error');
         commentInput.focus();
         return;
     }
-    
+
     try {
         // Get the current item to add the comment to its comments array
         const itemRef = db.collection('lists').doc(currentListId)
             .collection('items').doc(itemId);
-        
+
         const itemDoc = await itemRef.get();
         if (!itemDoc.exists) {
             showToast('Item not found', 'error');
             return;
         }
-        
+
         const itemData = itemDoc.data();
         const comments = itemData.comments || [];
-        
+
         // Add the new comment
         const newComment = {
             id: `comment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -4269,19 +4286,19 @@ async function addComment(itemId) {
             authorName: currentUser.displayName || currentUser.email,
             timestamp: firebase.firestore.Timestamp.now()
         };
-        
+
         comments.push(newComment);
-        
+
         // Update the item with the new comment
         await itemRef.update({
             comments: comments
         });
-        
+
         // Clear the input
         commentInput.value = '';
-        
+
         showToast('Comment added successfully!', 'success');
-        
+
         // Reload the list items to show the new comment
         loadListItems(currentListId);
     } catch (error) {
@@ -4297,10 +4314,10 @@ function toggleCommentForm(itemId) {
         const currentDisplay = formElement.style.display;
         const isShowing = currentDisplay === 'none';
         formElement.style.display = isShowing ? 'block' : 'none';
-        
+
         // Show/hide gray line based on whether form is showing or there are comments
-        const hasComments = commentsSection.querySelector('.comments-list') && 
-                          commentsSection.querySelector('.comments-list').children.length > 0;
+        const hasComments = commentsSection.querySelector('.comments-list') &&
+            commentsSection.querySelector('.comments-list').children.length > 0;
         commentsSection.style.borderTop = (isShowing || hasComments) ? '1px solid var(--divider)' : 'none';
     }
 }
@@ -4310,55 +4327,55 @@ async function editComment(itemId, commentId, commentIndex) {
         showToast('Please log in to edit comments', 'error');
         return;
     }
-    
+
     try {
         // Get the current item and comment
         const itemRef = db.collection('lists').doc(currentListId).collection('items').doc(itemId);
         const itemDoc = await itemRef.get();
-        
+
         if (!itemDoc.exists) {
             showToast('Item not found', 'error');
             return;
         }
-        
+
         const itemData = itemDoc.data();
         const comments = itemData.comments || [];
         const comment = comments[commentIndex];
-        
+
         if (!comment) {
             showToast('Comment not found', 'error');
             return;
         }
-        
+
         // Check if user owns this comment
         if (comment.authorEmail !== currentUser.email) {
             showToast('You can only edit your own comments', 'error');
             return;
         }
-        
+
         // Find the comment element in DOM
         const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`);
         if (!commentElement) {
             showToast('Comment element not found', 'error');
             return;
         }
-        
+
         const textElement = commentElement.querySelector('.comment-text');
         const originalText = comment.text;
-        
+
         // Replace text with textarea
         const textarea = document.createElement('textarea');
         textarea.className = 'comment-input';
         textarea.value = originalText;
         textarea.rows = 3;
         textarea.style.marginBottom = '8px';
-        
+
         // Create action buttons
         const actionsDiv = document.createElement('div');
         actionsDiv.style.display = 'flex';
         actionsDiv.style.gap = '8px';
         actionsDiv.style.marginTop = '8px';
-        
+
         const saveBtn = document.createElement('button');
         saveBtn.className = 'btn btn-primary';
         saveBtn.innerHTML = '<span class="material-icons" style="font-size: 16px; margin-right: 4px;">save</span>Save';
@@ -4368,12 +4385,12 @@ async function editComment(itemId, commentId, commentIndex) {
                 showToast('Comment cannot be empty', 'error');
                 return;
             }
-            
+
             if (newText === originalText) {
                 cancelEdit();
                 return;
             }
-            
+
             try {
                 // Update comment in array
                 comments[commentIndex] = {
@@ -4381,11 +4398,11 @@ async function editComment(itemId, commentId, commentIndex) {
                     text: newText,
                     editedAt: firebase.firestore.Timestamp.now()
                 };
-                
+
                 // Update in Firestore
                 await itemRef.update({ comments: comments });
                 showToast('Comment updated successfully!', 'success');
-                
+
                 // Reload items to show updated comment
                 await loadListItems(currentListId);
             } catch (error) {
@@ -4393,30 +4410,30 @@ async function editComment(itemId, commentId, commentIndex) {
                 showToast('Error updating comment: ' + error.message, 'error');
             }
         };
-        
+
         const cancelBtn = document.createElement('button');
         cancelBtn.className = 'btn btn-secondary';
         cancelBtn.innerHTML = '<span class="material-icons" style="font-size: 16px; margin-right: 4px;">cancel</span>Cancel';
         cancelBtn.onclick = cancelEdit;
-        
+
         function cancelEdit() {
             // Restore original text
             textElement.style.display = 'block';
             textarea.remove();
             actionsDiv.remove();
         }
-        
+
         // Replace text with editing interface
         textElement.style.display = 'none';
         textElement.parentNode.insertBefore(textarea, textElement);
         textElement.parentNode.insertBefore(actionsDiv, textElement.nextSibling);
         actionsDiv.appendChild(saveBtn);
         actionsDiv.appendChild(cancelBtn);
-        
+
         // Focus textarea
         textarea.focus();
         textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-        
+
     } catch (error) {
         console.error('Error editing comment:', error);
         showToast('Error editing comment: ' + error.message, 'error');
@@ -4428,48 +4445,48 @@ async function deleteComment(itemId, commentId, commentIndex) {
         showToast('Please log in to delete comments', 'error');
         return;
     }
-    
+
     try {
         // Get current item and comment
         const itemRef = db.collection('lists').doc(currentListId).collection('items').doc(itemId);
         const itemDoc = await itemRef.get();
-        
+
         if (!itemDoc.exists) {
             showToast('Item not found', 'error');
             return;
         }
-        
+
         const itemData = itemDoc.data();
         const comments = itemData.comments || [];
         const comment = comments[commentIndex];
-        
+
         if (!comment) {
             showToast('Comment not found', 'error');
             return;
         }
-        
+
         // Check if user owns this comment
         if (comment.authorEmail !== currentUser.email) {
             showToast('You can only delete your own comments', 'error');
             return;
         }
-        
+
         // Confirm deletion
         const confirmMessage = `Are you sure you want to delete this comment?\n\n"${comment.text.substring(0, 100)}${comment.text.length > 100 ? '...' : ''}"`;
         if (!confirm(confirmMessage)) {
             return;
         }
-        
+
         // Remove comment from array
         comments.splice(commentIndex, 1);
-        
+
         // Update in Firestore
         await itemRef.update({ comments: comments });
         showToast('Comment deleted successfully!', 'success');
-        
+
         // Reload items to reflect changes
         await loadListItems(currentListId);
-        
+
     } catch (error) {
         console.error('Error deleting comment:', error);
         showToast('Error deleting comment: ' + error.message, 'error');
@@ -4626,15 +4643,15 @@ function validateAndFormatUrl(url) {
     if (!url || typeof url !== 'string') {
         return '';
     }
-    
+
     // Trim whitespace
     url = url.trim();
-    
+
     // If URL is empty, return empty string
     if (!url) {
         return '';
     }
-    
+
     // Define supported protocols
     const supportedProtocols = {
         // Web protocols
@@ -4669,12 +4686,12 @@ function validateAndFormatUrl(url) {
         'ethereum:': true,
         'magnet:': true
     };
-    
+
     // Check if it's already a valid URL with protocol
     try {
         // Try to create URL object to validate basic structure
         const urlObj = new URL(url);
-        
+
         // Check if protocol is supported
         if (supportedProtocols[urlObj.protocol]) {
             return url;
@@ -4689,59 +4706,59 @@ function validateAndFormatUrl(url) {
     } catch (e) {
         // URL constructor failed, might be missing protocol
     }
-    
+
     // Special handling for email addresses (convert to mailto:)
     if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(url)) {
         return 'mailto:' + url;
     }
-    
+
     // Special handling for phone numbers (convert to tel:)
     if (/^[\+]?[1-9][\d]{0,15}$/.test(url.replace(/[\s\-\(\)]/g, ''))) {
         return 'tel:' + url;
     }
-    
+
     // If we get here, URL might be missing protocol
     // First check if it looks like localhost with port or IP with port
-    if (/^localhost(:\d+)?$/.test(url) || 
+    if (/^localhost(:\d+)?$/.test(url) ||
         /^127\.\d+\.\d+\.\d+(:\d+)?$/.test(url) ||
         /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(url)) {
         return 'https://' + url;
     }
-    
+
     // Try adding https:// first for web URLs
     try {
         const urlWithHttps = new URL('https://' + url);
-        
+
         // Basic validation for domain
-        if (urlWithHttps.hostname && 
-            (urlWithHttps.hostname.includes('.') || 
-             urlWithHttps.hostname === 'localhost' ||
-             urlWithHttps.hostname.startsWith('localhost') ||
-             /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(urlWithHttps.hostname))) {
-            
+        if (urlWithHttps.hostname &&
+            (urlWithHttps.hostname.includes('.') ||
+                urlWithHttps.hostname === 'localhost' ||
+                urlWithHttps.hostname.startsWith('localhost') ||
+                /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(urlWithHttps.hostname))) {
+
             return 'https://' + url;
         }
     } catch (e) {
         // Still invalid
     }
-    
+
     // Try adding http:// as fallback for web URLs
     try {
         const urlWithHttp = new URL('http://' + url);
-        
+
         // Basic validation for domain
-        if (urlWithHttp.hostname && 
-            (urlWithHttp.hostname.includes('.') || 
-             urlWithHttp.hostname === 'localhost' ||
-             urlWithHttp.hostname.startsWith('localhost') ||
-             /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(urlWithHttp.hostname))) {
-            
+        if (urlWithHttp.hostname &&
+            (urlWithHttp.hostname.includes('.') ||
+                urlWithHttp.hostname === 'localhost' ||
+                urlWithHttp.hostname.startsWith('localhost') ||
+                /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(urlWithHttp.hostname))) {
+
             return 'http://' + url;
         }
     } catch (e) {
         // Still invalid
     }
-    
+
     // If all attempts failed, return empty string
     return '';
 }
@@ -4755,17 +4772,17 @@ async function saveItem() {
     const rawPos = posInputEl ? (posInputEl.value || '').trim() : '';
     const itemsRef = db.collection('lists').doc(currentListId).collection('items');
     const desiredPosition = await parseCompositeOrAbsolutePosition(rawPos, itemsRef);
-    
+
     const conditionalVisibility = document.getElementById('itemConditionalVisibility').checked;
     const itemName = document.getElementById('itemName').value;
-    
+
     // Debug logging
     console.log('Item name being saved:', itemName);
-    
+
     // Get and validate URL
     const rawUrl = document.getElementById('itemURL').value.trim();
     let validatedUrl = '';
-    
+
     if (rawUrl) {
         // Validate and format URL
         validatedUrl = validateAndFormatUrl(rawUrl);
@@ -4774,7 +4791,7 @@ async function saveItem() {
             return;
         }
     }
-    
+
     const itemData = {
         name: itemName,
         url: validatedUrl,
@@ -4790,15 +4807,15 @@ async function saveItem() {
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
-    
+
     if (!itemData.name) {
         showToast('Item name is required', 'error');
         return;
     }
-    
+
     try {
         showLoading();
-        
+
         if (form.dataset.mode === 'add') {
             await db.collection('lists').doc(currentListId)
                 .collection('items').add(itemData);
@@ -4806,10 +4823,10 @@ async function saveItem() {
         } else {
             // Edit mode - update existing item
             const itemId = form.dataset.itemId;
-            
+
             // Don't override creation date for edits
             delete itemData.createdAt;
-            
+
             // Include groupId when updating; only update position if user provided a position input
             itemData.groupId = document.getElementById('itemGroup').value || null;
             if (!rawPos) {
@@ -4819,7 +4836,7 @@ async function saveItem() {
                 .collection('items').doc(itemId).update(itemData);
             showToast('Item updated successfully!', 'success');
         }
-        
+
         hideModal('itemModal');
         loadListItems(currentListId);
         hideLoading();
@@ -4847,7 +4864,7 @@ async function saveViewedList(listId) {
         console.log('Cannot save viewed list: missing user or listId');
         return;
     }
-    
+
     try {
         const userViewedListsRef = db.collection('users').doc(currentUser.uid).collection('viewedLists');
         const viewedListDoc = {
@@ -4855,7 +4872,7 @@ async function saveViewedList(listId) {
             viewedAt: firebase.firestore.FieldValue.serverTimestamp(),
             accessRole: 'viewer' // Always save as viewer since that's what this feature tracks
         };
-        
+
         // Use set with merge to update the timestamp if already exists
         await userViewedListsRef.doc(listId).set(viewedListDoc, { merge: true });
         console.log(`Saved list ${listId} to user's viewed lists`);
@@ -4870,28 +4887,28 @@ async function loadViewedLists() {
         console.log('Cannot load viewed lists: no user');
         return [];
     }
-    
+
     try {
         const userViewedListsRef = db.collection('users').doc(currentUser.uid).collection('viewedLists');
         const snapshot = await userViewedListsRef.orderBy('viewedAt', 'desc').limit(10).get();
-        
+
         const viewedListIds = [];
         snapshot.forEach(doc => {
             viewedListIds.push(doc.data().listId);
         });
-        
+
         if (viewedListIds.length === 0) {
             return [];
         }
-        
+
         // Fetch actual list data
-        const listsPromises = viewedListIds.map(listId => 
+        const listsPromises = viewedListIds.map(listId =>
             db.collection('lists').doc(listId).get()
         );
-        
+
         const listDocs = await Promise.all(listsPromises);
         const viewedLists = [];
-        
+
         listDocs.forEach((doc, index) => {
             if (doc.exists) {
                 viewedLists.push({
@@ -4902,7 +4919,7 @@ async function loadViewedLists() {
                 });
             }
         });
-        
+
         return viewedLists;
     } catch (error) {
         console.error('Error loading viewed lists:', error);
@@ -4916,21 +4933,21 @@ async function saveSettings() {
         showToast('Only list owners can save settings', 'error');
         return;
     }
-    
+
     try {
         const apiKeyInput = document.getElementById('geminiApiKey');
         const newApiKey = apiKeyInput ? apiKeyInput.value.trim() : '';
-        
+
         // Update the list with the new API key
         await db.collection('lists').doc(currentListId).update({
             geminiApiKey: newApiKey,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        
+
         // Update the global variable and current list object
         geminiApiKey = newApiKey;
         currentList.geminiApiKey = newApiKey;
-        
+
         showToast('Settings saved!', 'success');
         hideModal('settingsModal');
     } catch (error) {
@@ -4953,13 +4970,13 @@ function loadSettings() {
         }
         return;
     }
-    
+
     // Show API key section for owners and load current value
     const apiKeySection = document.querySelector('#settingsModal .settings-section');
     if (apiKeySection) {
         apiKeySection.style.display = 'block';
     }
-    
+
     const apiKeyInput = document.getElementById('geminiApiKey');
     if (apiKeyInput) {
         apiKeyInput.value = geminiApiKey || ''; // Use globally set geminiApiKey (from current list)
@@ -5030,7 +5047,7 @@ async function handleTempApiKey() {
     try {
         const itemDoc = await db.collection('lists').doc(currentListId).collection('items').doc(itemId).get();
         const item = itemDoc.data();
-        
+
         hideModal('apiKeyModal');
         await performItemSummarization(itemId, item.name, apiKey);
     } catch (error) {
@@ -5061,13 +5078,42 @@ async function performItemSummarization(itemId, itemName, apiKey) {
 }
 
 // Initialize Gemini API
-async function summarizeItemName(itemName, apiKey) {
+// Generic Gemini API call
+async function callGemini(prompt, apiKey) {
     const keyToUse = apiKey || geminiApiKey;
     if (!keyToUse) {
-        console.warn('Gemini API Key not set. Cannot generate item details.');
-        return { description: "" };
+        console.warn('Gemini API Key not set.');
+        throw new Error('Gemini API Key not set');
     }
 
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${keyToUse}`;
+    const body = {
+        contents: [{
+            parts: [{ text: prompt }]
+        }]
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Gemini API Error: ${response.status} ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    } catch (error) {
+        console.error("Error calling Gemini API:", error);
+        throw error;
+    }
+}
+
+// Initialize Gemini API
+async function summarizeItemName(itemName, apiKey) {
     try {
         console.log(`Generating details for item: ${itemName} using Gemini API`);
 
@@ -5082,28 +5128,9 @@ Item Name: "${itemName}"
 Item Name:
 Description:`;
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${keyToUse}`;
+        const generatedText = await callGemini(PROMPT, apiKey);
 
-        const body = {
-            contents: [
-                {
-                    parts: [
-                        { text: PROMPT }
-                    ]
-                }
-            ]
-        };
-
-        const response = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(body)
-        });
-
-        const data = await response.json();
-        const generatedText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (!generatedText) return { description: "" };
 
         // Parse the generated text into description
         const nameMatch = generatedText.match(/Item Name:\s*([\s\S]*?)(?:\nDescription:|$)/i);
@@ -5120,6 +5147,70 @@ Description:`;
     }
 }
 
+async function checkItemPrice(itemId) {
+    try {
+        // Get the item details
+        const itemDoc = await db.collection('lists').doc(currentListId).collection('items').doc(itemId).get();
+        const item = itemDoc.data();
+        if (!item || !item.url) {
+            showToast('Item has no URL to check', 'error');
+            return;
+        }
+
+        // Get the list's Gemini API key if available
+        const listDoc = await db.collection('lists').doc(currentListId).get();
+        const list = listDoc.data();
+        const apiKey = list.geminiApiKey;
+
+        if (!apiKey) {
+            showToast('Gemini API Key required for price check', 'error');
+            return;
+        }
+
+        showLoading();
+        showToast('Checking price and availability...', 'info');
+
+        const PROMPT = `Extract the current price and availability from this URL: ${item.url}. 
+        Return ONLY a JSON object with the following keys:
+        - "price": The numeric price (e.g., 29.99). If not found, return null.
+        - "availability": A short string describing availability (e.g., "In Stock", "Out of Stock", "Pre-order"). If not found, return null.
+        
+        JSON:`;
+
+        const generatedText = await callGemini(PROMPT, apiKey);
+
+        // Clean up the response to ensure it's valid JSON (remove markdown code blocks if present)
+        const jsonString = generatedText.replace(/```json\n?|\n?```/g, '').trim();
+        const result = JSON.parse(jsonString);
+
+        if (result) {
+            const updateData = {
+                lastPriceCheck: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            if (result.price !== null) {
+                updateData.price = result.price;
+            }
+            if (result.availability) {
+                updateData.availability = result.availability;
+            }
+
+            await db.collection('lists').doc(currentListId).collection('items').doc(itemId).update(updateData);
+
+            showToast('Price and availability updated!', 'success');
+            await loadListItems(currentListId);
+        } else {
+            showToast('Could not extract price information', 'warning');
+        }
+
+    } catch (error) {
+        console.error('Error checking price:', error);
+        showToast('Error checking price: ' + error.message, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
 
 // Share functions
 function setupShareButtons() {
@@ -5131,56 +5222,56 @@ function setupShareButtons() {
         } else {
             console.error('Element not found: copyViewerLink');
         }
-        
+
         const copyCollabLink = document.getElementById('copyCollabLink');
         if (copyCollabLink) {
             copyCollabLink.addEventListener('click', () => copyShareLink('collaborator'));
         } else {
             console.error('Element not found: copyCollabLink');
         }
-        
+
         const qrViewerCode = document.getElementById('qrViewerCode');
         if (qrViewerCode) {
             qrViewerCode.addEventListener('click', () => generateQRCode('viewer'));
         } else {
             console.error('Element not found: qrViewerCode');
         }
-        
+
         const qrCollabCode = document.getElementById('qrCollabCode');
         if (qrCollabCode) {
             qrCollabCode.addEventListener('click', () => generateQRCode('collaborator'));
         } else {
             console.error('Element not found: qrCollabCode');
         }
-        
+
         const emailViewerLink = document.getElementById('emailViewerLink');
         if (emailViewerLink) {
             emailViewerLink.addEventListener('click', () => emailShareLink('viewer'));
         } else {
             console.error('Element not found: emailViewerLink');
         }
-        
+
         const emailCollabLink = document.getElementById('emailCollabLink');
         if (emailCollabLink) {
             emailCollabLink.addEventListener('click', () => emailShareLink('collaborator'));
         } else {
             console.error('Element not found: emailCollabLink');
         }
-        
+
         const nativeShareViewer = document.getElementById('nativeShareViewer');
         if (nativeShareViewer) {
             nativeShareViewer.addEventListener('click', () => nativeShareList('viewer'));
         } else {
             console.error('Element not found: nativeShareViewer');
         }
-        
+
         const nativeShareCollab = document.getElementById('nativeShareCollab');
         if (nativeShareCollab) {
             nativeShareCollab.addEventListener('click', () => nativeShareList('collaborator'));
         } else {
             console.error('Element not found: nativeShareCollab');
         }
-        
+
         console.log('Share buttons setup completed');
     } catch (error) {
         console.error('Error setting up share buttons:', error);
@@ -5195,7 +5286,7 @@ function showInfoModal(item) {
     document.getElementById('infoItemName').textContent = item.name;
     document.getElementById('infoItemDescription').textContent = item.description || 'No description';
     document.getElementById('infoItemPrice').textContent = item.price ? `$${item.price}` : 'No price';
-    
+
     // Set up the link button if a URL exists
     const linkBtn = document.getElementById('infoItemLink');
     if (item.url) {
@@ -5204,7 +5295,7 @@ function showInfoModal(item) {
     } else {
         linkBtn.classList.add('hidden');
     }
-    
+
     // Show the modal
     showModal('infoModal');
 }
@@ -5212,18 +5303,18 @@ function showInfoModal(item) {
 // Edit Modal functions
 function showEditModal() {
     if (!currentList) return;
-    
+
     // Populate the edit modal with list details
     document.getElementById('editListName').value = currentList.name;
     document.getElementById('editListDescription').value = currentList.description || '';
     document.getElementById('editListEventDate').value = formatDateForInput(currentList.eventDate);
     document.getElementById('editListPublic').checked = currentList.isPublic || false;
 
-    
+
     // Populate collaborators and viewers lists
     populateUsersList('collaboratorsList', currentList.collaborators || {});
     populateUsersList('viewersList', currentList.viewers || {});
-    
+
     // Show the modal
     showModal('editModal');
 }
@@ -5231,23 +5322,23 @@ function showEditModal() {
 function populateUsersList(listId, users) {
     const listElement = document.getElementById(listId);
     listElement.innerHTML = '';
-    
+
     if (!Array.isArray(users)) {
         users = Object.values(users || {});
     }
-    
+
     users.forEach(email => {
         const listItem = document.createElement('li');
         listItem.className = 'user-item';
-        
+
         const userEmail = document.createElement('span');
         userEmail.textContent = email;
-        
+
         const removeBtn = document.createElement('button');
         removeBtn.className = 'icon-button';
         removeBtn.innerHTML = '<i class="material-icons">close</i>';
         removeBtn.addEventListener('click', () => removeUser(email, listId === 'collaboratorsList' ? 'collaborators' : 'viewers'));
-        
+
         listItem.appendChild(userEmail);
         listItem.appendChild(removeBtn);
         listElement.appendChild(listItem);
@@ -5256,11 +5347,11 @@ function populateUsersList(listId, users) {
 
 function removeUser(emailToRemove, role) {
     if (!currentList || !currentListId) return;
-    
+
     const listRef = db.collection('lists').doc(currentListId);
     const updateData = {};
     updateData[role] = firebase.firestore.FieldValue.arrayRemove(emailToRemove);
-    
+
     listRef.update(updateData)
         .then(() => {
             showToast(`User removed from ${role}`, 'success');
@@ -5291,12 +5382,12 @@ function addViewer() {
 function addUserToList(role) {
     const inputId = role === 'collaborator' ? 'newCollaboratorEmail' : 'newViewerEmail';
     const email = document.getElementById(inputId).value.trim();
-    
+
     if (!email || !currentList || !currentListId) {
         showToast('Please enter a valid email', 'error');
         return;
     }
-    
+
     // Find user by email
     db.collection('users').where('email', '==', email).get()
         .then(snapshot => {
@@ -5304,29 +5395,29 @@ function addUserToList(role) {
                 showToast('User not found', 'error');
                 return;
             }
-            
+
             const user = snapshot.docs[0];
             const userId = user.id;
             const userData = user.data();
-            
+
             // Don't add if it's the current user
             if (userData.email === auth.currentUser.email) {
                 showToast('You cannot add yourself', 'error');
                 return;
             }
-            
+
             // Update the list document
             const listRef = db.collection('lists').doc(currentListId);
             const updateData = {};
             const rolePath = role === 'collaborator' ? 'collaborators' : 'viewers';
             updateData[rolePath] = firebase.firestore.FieldValue.arrayUnion(userData.email);
-            
+
             return listRef.update(updateData);
         })
         .then(() => {
             showToast(`User added as ${role}`, 'success');
             document.getElementById(inputId).value = '';
-            
+
             // Refresh the current list data
             return db.collection('lists').doc(currentListId).get();
         })
@@ -5347,13 +5438,13 @@ function addUserToList(role) {
 function saveListEdit() {
 
     if (!currentList || !currentListId) return;
-    
+
     const name = document.getElementById('editListName').value.trim();
     if (!name) {
         showToast('List name is required', 'error');
         return;
     }
-    
+
     const description = document.getElementById('editListDescription').value.trim();
     const eventDate = document.getElementById('editListEventDate').value;
     const isPublic = document.getElementById('editListPublic').checked;
@@ -5365,27 +5456,27 @@ function saveListEdit() {
         isPublic,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     })
-    .then(() => {
-        showToast('List updated successfully', 'success');
-        hideModal('editModal');
-        
-        // Update the current list object and refresh the UI
-        currentList.name = name;
-        currentList.description = description;
-        currentList.eventDate = eventDate;
-        currentList.isPublic = isPublic;
+        .then(() => {
+            showToast('List updated successfully', 'success');
+            hideModal('editModal');
 
-        
-        // Update the list header
-        document.getElementById('listTitle').textContent = name;
-        // Update the list in the UI
-        loadList(currentListId);
-        document.getElementById('listEventDate').textContent = eventDate ? `Event date: ${eventDate}` : '';
-    })
-    .catch(error => {
-        console.error('Error updating list:', error);
-        showToast(`Error updating list: ${error.message}`, 'error');
-    });
+            // Update the current list object and refresh the UI
+            currentList.name = name;
+            currentList.description = description;
+            currentList.eventDate = eventDate;
+            currentList.isPublic = isPublic;
+
+
+            // Update the list header
+            document.getElementById('listTitle').textContent = name;
+            // Update the list in the UI
+            loadList(currentListId);
+            document.getElementById('listEventDate').textContent = eventDate ? `Event date: ${eventDate}` : '';
+        })
+        .catch(error => {
+            console.error('Error updating list:', error);
+            showToast(`Error updating list: ${error.message}`, 'error');
+        });
 }
 
 function copyShareLink(type) {
@@ -5395,7 +5486,7 @@ function copyShareLink(type) {
             showToast('Cannot share: No list is currently loaded', 'error');
             return;
         }
-        
+
         const url = generateShareUrl(type);
         copyToClipboard(url);
         console.log(`Share link generated for type: ${type}`);
@@ -5412,7 +5503,7 @@ function copyToClipboard(text) {
             showToast('Nothing to copy', 'error');
             return;
         }
-        
+
         console.log('Attempting to copy text to clipboard');
         navigator.clipboard.writeText(text)
             .then(() => {
@@ -5422,14 +5513,14 @@ function copyToClipboard(text) {
             .catch(err => {
                 console.error('Failed to copy text to clipboard:', err);
                 showToast('Failed to copy text', 'error');
-                
+
                 // Fallback for browsers that don't support clipboard API
                 fallbackCopyToClipboard(text);
             });
     } catch (error) {
         console.error('Error in copyToClipboard function:', error);
         showToast('Failed to copy text', 'error');
-        
+
         // Try fallback method
         fallbackCopyToClipboard(text);
     }
@@ -5445,10 +5536,10 @@ function fallbackCopyToClipboard(text) {
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
-        
+
         const successful = document.execCommand('copy');
         document.body.removeChild(textArea);
-        
+
         if (successful) {
             console.log('Fallback clipboard copy succeeded');
             showToast('Copied to clipboard!', 'success');
@@ -5469,21 +5560,21 @@ function generateShareUrl(type) {
             showToast('Unable to generate share link', 'error');
             return '';
         }
-        
+
         if (!type) {
             console.warn('No share type specified, defaulting to viewer');
             type = 'viewer';
         }
-        
+
         // Validate type
         if (type !== 'viewer' && type !== 'collaborator') {
             console.warn(`Invalid share type: ${type}, defaulting to 'viewer'`);
             type = 'viewer';
         }
-        
+
         const baseUrl = window.location.origin + window.location.pathname;
         const shareUrl = `${baseUrl}?list=${encodeURIComponent(currentListId)}&role=${encodeURIComponent(type)}`;
-        
+
         console.log(`Generated share URL for ${type} role`);
         return shareUrl;
     } catch (error) {
@@ -5500,7 +5591,7 @@ async function nativeShareList(type = 'viewer') {
             showToast('Cannot share: No list is currently loaded', 'error');
             return;
         }
-        
+
         // Check if Web Share API is supported
         if (!navigator.share) {
             console.log('Web Share API not supported, falling back to copying link');
@@ -5508,26 +5599,26 @@ async function nativeShareList(type = 'viewer') {
             copyShareLink(type);
             return;
         }
-        
+
         const shareUrl = generateShareUrl(type);
         const listTitle = currentList?.name || 'Wishlist';
         const accessType = type === 'collaborator' ? 'with edit access' : 'with view-only access';
         const listDescription = currentList?.description || `Check out my wishlist ${accessType}!`;
-        
+
         const shareData = {
             title: listTitle,
             text: listDescription,
             url: shareUrl
         };
-        
+
         console.log(`Attempting to use native share API for ${type} role`);
         await navigator.share(shareData);
         console.log(`Successfully shared ${type} link using native share API`);
         showToast('Shared successfully!', 'success');
-        
+
     } catch (error) {
         console.error('Error using native share:', error);
-        
+
         // Handle different error cases
         if (error.name === 'AbortError') {
             console.log('Share was cancelled by user');
@@ -5550,51 +5641,51 @@ function generateQRCode(type) {
             showToast('Cannot generate QR code: No list is currently loaded', 'error');
             return;
         }
-        
+
         const url = generateShareUrl(type);
         if (!url) {
             console.error('Failed to generate share URL for QR code');
             showToast('Error generating QR code', 'error');
             return;
         }
-        
+
         const qrDiv = document.getElementById('qrCanvas');
         const container = document.getElementById('qrCodeContainer');
-        
+
         // Clear any existing QR code completely
         qrDiv.innerHTML = '';
         // Remove any existing QR code elements that might have been added by the library
         while (qrDiv.firstChild) {
             qrDiv.removeChild(qrDiv.firstChild);
         }
-        
+
         // Also remove any fallback element that might exist
         const fallbackElement = document.getElementById('qrFallback');
         if (fallbackElement) {
             fallbackElement.remove();
         }
-        
+
         // Reset canvas display
         qrDiv.style.display = 'block';
-        
+
         // Check if QRCode library is available
         console.log('typeof QRCode:', typeof QRCode);
         if (typeof QRCode !== 'undefined') {
             try {
-                 new QRCode(qrDiv, {
-                     text: url,
-                     width: 200,
-                     height: 200,
-                     colorDark : "#000000",
-                     colorLight : "#ffffff",
-                     correctLevel : QRCode.CorrectLevel.H
-                 });
-                 container.classList.remove('hidden');
-                 console.log(`QR code generated for type: ${type}`);
-             } catch (error) {
-                 console.error("Error generating QR code:", error);
-                 showFallbackQRCode(url, container, qrDiv);
-             }
+                new QRCode(qrDiv, {
+                    text: url,
+                    width: 200,
+                    height: 200,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+                container.classList.remove('hidden');
+                console.log(`QR code generated for type: ${type}`);
+            } catch (error) {
+                console.error("Error generating QR code:", error);
+                showFallbackQRCode(url, container, qrDiv);
+            }
         } else {
             showFallbackQRCode(url, container, qrDiv);
         }
@@ -5607,21 +5698,21 @@ function generateQRCode(type) {
 function showFallbackQRCode(url, container, canvas) {
     try {
         console.log('Using fallback QR code display');
-        
+
         // Validate inputs
         if (!url) {
             console.error('No URL provided for fallback QR code');
             return;
         }
-        
+
         if (!container || !canvas) {
             console.error('Missing container or canvas element for fallback QR code');
             return;
         }
-        
+
         // Hide the canvas
         canvas.style.display = 'none';
-        
+
         // Create a fallback element if it doesn't exist
         let fallbackElement = document.getElementById('qrFallback');
         if (!fallbackElement) {
@@ -5630,7 +5721,7 @@ function showFallbackQRCode(url, container, canvas) {
             fallbackElement.className = 'qr-fallback';
             container.appendChild(fallbackElement);
         }
-        
+
         // Show the URL as text
         fallbackElement.innerHTML = `
             <p>QR Code generation is unavailable.</p>
@@ -5638,7 +5729,7 @@ function showFallbackQRCode(url, container, canvas) {
             <div class="share-url">${escapeHtml(url)}</div>
             <button class="btn btn-primary" onclick="copyToClipboard('${url.replace(/'/g, "\\'")}')">Copy URL</button>
         `;
-        
+
         // Show the container
         container.classList.remove('hidden');
         console.log('Fallback QR code display completed');
@@ -5655,11 +5746,11 @@ function emailShareLink(type) {
             showToast('Cannot share: No list is currently loaded', 'error');
             return;
         }
-        
+
         const url = generateShareUrl(type);
         const subject = encodeURIComponent(`Check out this wishlist: ${currentList.name}`);
         const body = encodeURIComponent(`I'd like to share this wishlist with you:\n\n${url}`);
-        
+
         console.log(`Email share link generated for type: ${type}`);
         window.location.href = `mailto:?subject=${subject}&body=${body}`;
     } catch (error) {
@@ -5686,7 +5777,7 @@ function hideModal(modalId) {
     const modal = document.getElementById(modalId);
     modal.classList.remove('show');
     document.body.style.overflow = '';
-    
+
     // Hide QR code container when closing share modal
     if (modalId === 'shareModal') {
         document.getElementById('qrCodeContainer').classList.add('hidden');
@@ -5705,12 +5796,12 @@ function showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;
-    
+
     document.getElementById('toastContainer').appendChild(toast);
-    
+
     // Trigger animation
     setTimeout(() => toast.classList.add('show'), 100);
-    
+
     // Remove after 3 seconds
     setTimeout(() => {
         toast.classList.remove('show');
@@ -5756,7 +5847,7 @@ function escapeHtml(text) {
             console.warn('Attempted to escape null or undefined text');
             return '';
         }
-        
+
         // Convert to string in case a non-string value is passed
         const textStr = String(text);
         const div = document.createElement('div');
@@ -5774,9 +5865,9 @@ function formatDateForInput(dateObj) {
         if (!dateObj) {
             return '';
         }
-        
+
         let date;
-        
+
         // Handle Firebase Timestamp objects
         if (dateObj.toDate && typeof dateObj.toDate === 'function') {
             try {
@@ -5802,13 +5893,13 @@ function formatDateForInput(dateObj) {
         } else {
             return '';
         }
-        
+
         // Check if date is valid
         if (isNaN(date.getTime())) {
             console.warn('Invalid date object provided to formatDateForInput');
             return '';
         }
-        
+
         // Format as YYYY-MM-DD
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -5826,7 +5917,7 @@ function formatDate(dateObj) {
             console.log('No date object provided to formatDate');
             return 'Not available';
         }
-        
+
         // Handle Firebase Timestamp objects
         if (dateObj.toDate && typeof dateObj.toDate === 'function') {
             try {
@@ -5844,13 +5935,13 @@ function formatDate(dateObj) {
                 return 'Invalid date';
             }
         }
-        
+
         // Check if date is valid
         if (isNaN(dateObj.getTime())) {
             console.warn('Invalid date object provided to formatDate');
             return 'Invalid date';
         }
-        
+
         return dateObj.toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'long',
@@ -5863,7 +5954,7 @@ function formatDate(dateObj) {
 }
 
 // Handle URL fragments for jumping to specific items
-window.addEventListener('hashchange', function() {
+window.addEventListener('hashchange', function () {
     const hash = window.location.hash;
     if (hash.startsWith('#')) {
         const itemNumber = parseInt(hash.substring(1));
@@ -5892,16 +5983,16 @@ function handleNativeShare(type) {
             showToast('Cannot share: No list is currently loaded', 'error');
             return;
         }
-        
+
         const url = generateShareUrl(type);
         const shareData = {
             title: `Wishlist: ${currentList.name}`,
             text: `Check out this wishlist!`,
             url: url
         };
-        
+
         console.log(`Attempting native share for type: ${type}`);
-        
+
         if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
             navigator.share(shareData).catch(err => {
                 console.error('Error sharing:', err);
@@ -5941,7 +6032,7 @@ function isAndroid() {
 
 // Initialize URL handling on load
 if (window.location.hash) {
-    window.addEventListener('load', function() {
+    window.addEventListener('load', function () {
         setTimeout(() => {
             const hash = window.location.hash;
             if (hash.startsWith('#')) {
@@ -5961,22 +6052,22 @@ if (window.location.hash) {
  */
 function populateSidebarLists() {
     sidebarListContainer.innerHTML = ''; // Clear existing lists
-    
+
     const hasUserLists = userLists.length > 0;
     const hasViewedLists = viewedListsGlobal.length > 0;
-    
+
     if (!hasUserLists && !hasViewedLists) {
         sidebarListContainer.innerHTML = '<li class="text-center mt-3">No lists yet.</li>';
         return;
     }
-    
+
     // Add user lists
     if (hasUserLists) {
         const userListsHeader = document.createElement('li');
         userListsHeader.className = 'sidebar-section-header';
         userListsHeader.textContent = 'My Lists';
         sidebarListContainer.appendChild(userListsHeader);
-        
+
         userLists.forEach(list => {
             const listItem = document.createElement('li');
             listItem.dataset.listId = list.id;
@@ -5985,20 +6076,20 @@ function populateSidebarLists() {
             sidebarListContainer.appendChild(listItem);
         });
     }
-    
+
     // Add viewed lists
     if (hasViewedLists) {
         const viewedListsHeader = document.createElement('li');
         viewedListsHeader.className = 'sidebar-section-header';
         viewedListsHeader.textContent = 'Recently Viewed';
         sidebarListContainer.appendChild(viewedListsHeader);
-        
+
         viewedListsGlobal.forEach(list => {
             const listItem = document.createElement('li');
             listItem.dataset.listId = list.id;
             listItem.textContent = list.name;
             listItem.className = 'sidebar-list-item viewed-list';
-            
+
             // Add click handler to set viewer mode
             listItem.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -6006,7 +6097,7 @@ function populateSidebarLists() {
                 showBoughtItems = true;
                 loadList(list.id);
             });
-            
+
             sidebarListContainer.appendChild(listItem);
         });
     }
@@ -6020,7 +6111,7 @@ function showInfoModal(item) {
     document.getElementById('infoItemDescription').textContent = item.description || 'No description';
     document.getElementById('infoItemPrice').textContent = item.price ? `$${item.price}` : 'No price';
 
-    
+
     // Set up the link button if a URL exists
     const linkBtn = document.getElementById('infoItemLink');
     if (item.url) {
@@ -6029,7 +6120,7 @@ function showInfoModal(item) {
     } else {
         linkBtn.classList.add('hidden');
     }
-    
+
     // Show the modal
     showModal('infoModal');
 }
@@ -6040,28 +6131,28 @@ function showEditModal() {
         console.error('showEditModal: currentList is null');
         return;
     }
-    
+
     console.log('showEditModal: currentList.eventDate =', currentList.eventDate);
     console.log('showEditModal: typeof currentList.eventDate =', typeof currentList.eventDate);
-    
+
     // Populate the edit modal with list details
     document.getElementById('editListName').value = currentList.name;
     document.getElementById('editListDescription').value = currentList.description || '';
-    
+
     // Format and set the event date
     const formattedDate = formatDateForInput(currentList.eventDate);
     console.log('showEditModal: formattedDate =', formattedDate);
     const eventDateInput = document.getElementById('editListEventDate');
     eventDateInput.value = formattedDate;
     console.log('showEditModal: eventDateInput.value after setting =', eventDateInput.value);
-    
+
     document.getElementById('editListPublic').checked = currentList.isPublic || false;
     document.getElementById('editListOrdered').checked = currentList.ordered !== false;
-    
+
     // Populate collaborators and viewers lists
     populateUsersList('collaboratorsList', currentList.collaborators || {});
     populateUsersList('viewersList', currentList.viewers || {});
-    
+
     // Show the modal
     showModal('editModal');
 }
@@ -6069,19 +6160,19 @@ function showEditModal() {
 function populateUsersList(listId, users) {
     const listElement = document.getElementById(listId);
     listElement.innerHTML = '';
-    
+
     Object.entries(users).forEach(([uid, email]) => {
         const listItem = document.createElement('li');
         listItem.className = 'user-item';
-        
+
         const userEmail = document.createElement('span');
         userEmail.textContent = email;
-        
+
         const removeBtn = document.createElement('button');
         removeBtn.className = 'icon-button';
         removeBtn.innerHTML = '<i class="material-icons">close</i>';
         removeBtn.addEventListener('click', () => removeUser(uid, listId === 'collaboratorsList' ? 'collaborators' : 'viewers'));
-        
+
         listItem.appendChild(userEmail);
         listItem.appendChild(removeBtn);
         listElement.appendChild(listItem);
@@ -6090,11 +6181,11 @@ function populateUsersList(listId, users) {
 
 function removeUser(uid, role) {
     if (!currentList || !currentListId) return;
-    
+
     const listRef = db.collection('lists').doc(currentListId);
     const updateData = {};
     updateData[`${role}.${uid}`] = firebase.firestore.FieldValue.delete();
-    
+
     listRef.update(updateData)
         .then(() => {
             showToast(`User removed from ${role}`, 'success');
@@ -6122,12 +6213,12 @@ function addViewer() {
 function addUserToList(role) {
     const inputId = role === 'collaborator' ? 'newCollaboratorEmail' : 'newViewerEmail';
     const email = document.getElementById(inputId).value.trim();
-    
+
     if (!email || !currentList || !currentListId) {
         showToast('Please enter a valid email', 'error');
         return;
     }
-    
+
     // Find user by email
     db.collection('users').where('email', '==', email).get()
         .then(snapshot => {
@@ -6135,29 +6226,29 @@ function addUserToList(role) {
                 showToast('User not found', 'error');
                 return;
             }
-            
+
             const user = snapshot.docs[0];
             const userId = user.id;
             const userData = user.data();
-            
+
             // Don't add if it's the current user
             if (userId === auth.currentUser.uid) {
                 showToast('You cannot add yourself', 'error');
                 return;
             }
-            
+
             // Update the list document
             const listRef = db.collection('lists').doc(currentListId);
             const updateData = {};
             const rolePath = role === 'collaborator' ? 'collaborators' : 'viewers';
             updateData[`${rolePath}.${userId}`] = userData.email;
-            
+
             return listRef.update(updateData);
         })
         .then(() => {
             showToast(`User added as ${role}`, 'success');
             document.getElementById(inputId).value = '';
-            
+
             // Refresh the current list data
             return db.collection('lists').doc(currentListId).get();
         })
@@ -6177,18 +6268,18 @@ function addUserToList(role) {
 
 function saveListEdit() {
     if (!currentList || !currentListId) return;
-    
+
     const name = document.getElementById('editListName').value.trim();
     if (!name) {
         showToast('List name is required', 'error');
         return;
     }
-    
+
     const description = document.getElementById('editListDescription').value.trim();
     const eventDate = document.getElementById('editListEventDate').value;
     const isPublic = document.getElementById('editListPublic').checked;
     const ordered = document.getElementById('editListOrdered').checked;
-    
+
     const listRef = db.collection('lists').doc(currentListId);
     listRef.update({
         name,
@@ -6198,27 +6289,27 @@ function saveListEdit() {
         ordered,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     })
-    .then(() => {
-        showToast('List updated successfully', 'success');
-        hideModal('editModal');
-        
-        // Update the current list object and refresh the UI
-        currentList.name = name;
-        currentList.description = description;
-        currentList.eventDate = eventDate;
-        currentList.isPublic = isPublic;
-        currentList.ordered = ordered;
-        
-        // Update the list header
-        document.getElementById('listTitle').textContent = name;
-        // Update the list in the UI
-        loadList(currentListId);
-        document.getElementById('listEventDate').textContent = eventDate ? `Event date: ${eventDate}` : '';
-    })
-    .catch(error => {
-        console.error('Error updating list:', error);
-        showToast(`Error updating list: ${error.message}`, 'error');
-    });
+        .then(() => {
+            showToast('List updated successfully', 'success');
+            hideModal('editModal');
+
+            // Update the current list object and refresh the UI
+            currentList.name = name;
+            currentList.description = description;
+            currentList.eventDate = eventDate;
+            currentList.isPublic = isPublic;
+            currentList.ordered = ordered;
+
+            // Update the list header
+            document.getElementById('listTitle').textContent = name;
+            // Update the list in the UI
+            loadList(currentListId);
+            document.getElementById('listEventDate').textContent = eventDate ? `Event date: ${eventDate}` : '';
+        })
+        .catch(error => {
+            console.error('Error updating list:', error);
+            showToast(`Error updating list: ${error.message}`, 'error');
+        });
 }
 
 function copyShareLink(type) {
@@ -6228,13 +6319,13 @@ function copyShareLink(type) {
             showToast('Cannot share: No list is currently loaded', 'error');
             return;
         }
-        
+
         const url = generateShareUrl(type);
         if (!url) {
             console.error('Failed to generate share URL');
             return;
         }
-        
+
         copyToClipboard(url);
         console.log(`Share link generated for type: ${type}`);
     } catch (error) {
@@ -6272,11 +6363,11 @@ async function importList() {
                     geminiApiKey: importGeminiApiKey,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
-                
+
                 // Update the global variable and current list object
                 geminiApiKey = importGeminiApiKey;
                 currentList.geminiApiKey = importGeminiApiKey;
-                
+
                 console.log('API key saved to list');
             } catch (error) {
                 console.error('Error saving API key to list:', error);
@@ -6317,7 +6408,7 @@ async function importList() {
 
                         let generatedName = itemData.name || 'Untitled Item';
                         let description = itemData.description || '';
-                        
+
                         if (useAiSummarization && importGeminiApiKey) {
                             const aiDetails = await summarizeItemName(itemData.name || 'Untitled Item', importGeminiApiKey);
                             generatedName = aiDetails.generatedName || generatedName;
@@ -6352,7 +6443,7 @@ async function importList() {
                 }
             };
 
-            reader.onerror = function() {
+            reader.onerror = function () {
                 showToast('Error reading file', 'error');
                 if (document.body.contains(fileInput)) {
                     document.body.removeChild(fileInput);
@@ -6408,21 +6499,21 @@ function generateShareUrl(type) {
             showToast('Unable to generate share link', 'error');
             return '';
         }
-        
+
         if (!type) {
             console.warn('No share type specified, defaulting to viewer');
             type = 'viewer';
         }
-        
+
         // Validate type
         if (type !== 'viewer' && type !== 'collaborator') {
             console.warn(`Invalid share type: ${type}, defaulting to 'viewer'`);
             type = 'viewer';
         }
-        
+
         const baseUrl = window.location.origin + window.location.pathname;
         const shareUrl = `${baseUrl}?list=${encodeURIComponent(currentListId)}&role=${encodeURIComponent(type)}`;
-        
+
         console.log(`Generated share URL for ${type} role`);
         return shareUrl;
     } catch (error) {
@@ -6440,17 +6531,17 @@ function emailShareLink(type) {
             showToast('Cannot share: No list is currently loaded', 'error');
             return;
         }
-        
+
         const url = generateShareUrl(type);
         if (!url) {
             console.error('Failed to generate share URL');
             showToast('Error generating share link', 'error');
             return;
         }
-        
+
         const subject = encodeURIComponent(`Check out this wishlist: ${currentList.name}`);
         const body = encodeURIComponent(`I'd like to share this wishlist with you:\n\n${url}`);
-        
+
         console.log(`Email share link generated for type: ${type}`);
         window.location.href = `mailto:?subject=${subject}&body=${body}`;
     } catch (error) {
@@ -6477,7 +6568,7 @@ function hideModal(modalId) {
     const modal = document.getElementById(modalId);
     modal.classList.remove('show');
     document.body.style.overflow = '';
-    
+
     // Hide QR code container when closing share modal
     if (modalId === 'shareModal') {
         document.getElementById('qrCodeContainer').classList.add('hidden');
@@ -6496,12 +6587,12 @@ function showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;
-    
+
     document.getElementById('toastContainer').appendChild(toast);
-    
+
     // Trigger animation
     setTimeout(() => toast.classList.add('show'), 100);
-    
+
     // Remove after 3 seconds
     setTimeout(() => {
         toast.classList.remove('show');
@@ -6522,7 +6613,7 @@ function escapeHtml(text) {
             console.warn('Attempted to escape null or undefined text');
             return '';
         }
-        
+
         // Convert to string in case a non-string value is passed
         const textStr = String(text);
         const div = document.createElement('div');
@@ -6540,9 +6631,9 @@ function formatDateForInput(dateObj) {
         if (!dateObj) {
             return '';
         }
-        
+
         let date;
-        
+
         // Handle Firebase Timestamp objects
         if (dateObj.toDate && typeof dateObj.toDate === 'function') {
             try {
@@ -6568,13 +6659,13 @@ function formatDateForInput(dateObj) {
         } else {
             return '';
         }
-        
+
         // Check if date is valid
         if (isNaN(date.getTime())) {
             console.warn('Invalid date object provided to formatDateForInput');
             return '';
         }
-        
+
         // Format as YYYY-MM-DD
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -6592,7 +6683,7 @@ function formatDate(dateObj) {
             console.log('No date object provided to formatDate');
             return 'Not available';
         }
-        
+
         // Handle Firebase Timestamp objects
         if (dateObj.toDate && typeof dateObj.toDate === 'function') {
             try {
@@ -6610,13 +6701,13 @@ function formatDate(dateObj) {
                 return 'Invalid date';
             }
         }
-        
+
         // Check if date is valid
         if (isNaN(dateObj.getTime())) {
             console.warn('Invalid date object provided to formatDate');
             return 'Invalid date';
         }
-        
+
         return dateObj.toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'long',
@@ -6629,7 +6720,7 @@ function formatDate(dateObj) {
 }
 
 // Handle URL fragments for jumping to specific items
-window.addEventListener('hashchange', function() {
+window.addEventListener('hashchange', function () {
     const hash = window.location.hash;
     if (hash.startsWith('#')) {
         const itemNumber = parseInt(hash.substring(1));
