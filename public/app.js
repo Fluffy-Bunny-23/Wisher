@@ -5181,16 +5181,30 @@ async function checkItemPrice(itemId) {
 
         let PROMPT;
         if (isAmazon) {
-            // Simplified prompt to avoid model refusal, but asking for sale details
-            PROMPT = `Extract the current price, original price, discount, and availability from this Amazon URL: ${item.url}.
-            
-            Return ONLY a JSON object with these keys:
-            - "price": Numeric current price.
-            - "originalPrice": Numeric original/list price (if on sale).
-            - "discount": Numeric discount percentage (if on sale).
-            - "availability": String (e.g., "In Stock").
-            
-            JSON:`;
+            // Use detailed HTML parsing based on actual Amazon structure
+            PROMPT = `You are parsing an Amazon product page HTML from this URL: ${item.url}.
+
+Find these specific HTML elements and extract their text content:
+
+1. **Current Price**: Look for a span with class "a-price-whole" (contains dollars) AND "a-price-fraction" (contains cents). Combine them as one decimal number.
+
+2. **Original/Typical Price**: Look for text that says "Typical price:" followed by a price. The price will also use "a-price-whole" and "a-price-fraction" classes. Extract this numeric value.
+
+3. **Discount Percentage**: Look for a badge/span near the price that contains "-X%" format (e.g., "-17%"). Extract just the number without the minus sign or percent.
+
+4. **Availability**: Look for text like "In Stock", "Out of Stock", "Only X left in stock", or "Currently unavailable".
+
+Return ONLY a valid JSON object:
+{
+  "price": 50.39,
+  "originalPrice": 60.99,
+  "discount": 17,
+  "availability": "In Stock"
+}
+
+If any field is not found, use null. Ensure all prices are numbers (not strings).
+
+JSON:`;
         } else {
             // For other sites, use general extraction
             PROMPT = `Extract the current price and availability from this URL: ${item.url}. 
@@ -5215,12 +5229,20 @@ async function checkItemPrice(itemId) {
             if (result.price !== null && result.price !== undefined) {
                 updateData.price = result.price;
             }
+
+            // Update or clear sale data
             if (result.originalPrice !== null && result.originalPrice !== undefined) {
                 updateData.originalPrice = result.originalPrice;
+            } else {
+                updateData.originalPrice = firebase.firestore.FieldValue.delete();
             }
+
             if (result.discount !== null && result.discount !== undefined) {
                 updateData.discount = result.discount;
+            } else {
+                updateData.discount = firebase.firestore.FieldValue.delete();
             }
+
             if (result.availability) {
                 updateData.availability = result.availability;
             }
