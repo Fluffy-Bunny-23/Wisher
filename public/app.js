@@ -2773,7 +2773,13 @@ function createItemCard(item, position) {
                 ` : ''}
 
                 <div class="item-meta">
-                    ${item.price ? `<span class="item-price">$${item.price}</span>` : ''}
+                    ${item.originalPrice && item.price ? `
+                        <span class="item-price-sale">
+                            <span class="original-price">$${item.originalPrice}</span>
+                            ${item.discount ? `<span class="discount-badge">-${item.discount}%</span>` : ''}
+                            <span class="sale-price">$${item.price}</span>
+                        </span>
+                    ` : item.price ? `<span class="item-price">$${item.price}</span>` : ''}
                     ${item.availability ? `
                         <span class="item-availability ${item.availability.toLowerCase().includes('out of stock') || item.availability.toLowerCase().includes('unavailable') ? 'out-of-stock' : 'in-stock'}">
                             ${escapeHtml(item.availability)}
@@ -5175,18 +5181,16 @@ async function checkItemPrice(itemId) {
 
         let PROMPT;
         if (isAmazon) {
-            // For Amazon, provide specific HTML structure to look for
-            PROMPT = `You are viewing an Amazon product page at this URL: ${item.url}. 
+            // Simplified prompt to avoid model refusal, but asking for sale details
+            PROMPT = `Extract the current price, original price, discount, and availability from this Amazon URL: ${item.url}.
             
-Extract the price and availability by looking for these specific HTML elements:
-- Price: Look for elements with classes "a-price-whole" (whole number), "a-price-decimal" (decimal point), and "a-price-fraction" (cents). Combine them to get the full price.
-- Availability: Look for text like "In Stock", "Out of Stock", "Currently unavailable", "Only X left in stock", etc.
-
-Return ONLY a JSON object with these keys:
-- "price": The numeric price (e.g., 50.39). Combine the whole and fraction parts. If not found, return null.
-- "availability": A short string describing availability (e.g., "In Stock", "Out of Stock"). If not found, return null.
-
-JSON:`;
+            Return ONLY a JSON object with these keys:
+            - "price": Numeric current price.
+            - "originalPrice": Numeric original/list price (if on sale).
+            - "discount": Numeric discount percentage (if on sale).
+            - "availability": String (e.g., "In Stock").
+            
+            JSON:`;
         } else {
             // For other sites, use general extraction
             PROMPT = `Extract the current price and availability from this URL: ${item.url}. 
@@ -5208,8 +5212,14 @@ JSON:`;
                 lastPriceCheck: firebase.firestore.FieldValue.serverTimestamp()
             };
 
-            if (result.price !== null) {
+            if (result.price !== null && result.price !== undefined) {
                 updateData.price = result.price;
+            }
+            if (result.originalPrice !== null && result.originalPrice !== undefined) {
+                updateData.originalPrice = result.originalPrice;
+            }
+            if (result.discount !== null && result.discount !== undefined) {
+                updateData.discount = result.discount;
             }
             if (result.availability) {
                 updateData.availability = result.availability;
@@ -5230,6 +5240,7 @@ JSON:`;
         hideLoading();
     }
 }
+
 
 
 // Share functions
@@ -5305,7 +5316,7 @@ function showInfoModal(item) {
     document.getElementById('infoItemImage').alt = item.name;
     document.getElementById('infoItemName').textContent = item.name;
     document.getElementById('infoItemDescription').textContent = item.description || 'No description';
-    document.getElementById('infoItemPrice').textContent = item.price ? `$${item.price}` : 'No price';
+    document.getElementById('infoItemPrice').textContent = item.price ? `$${item.price} ` : 'No price';
 
     // Set up the link button if a URL exists
     const linkBtn = document.getElementById('infoItemLink');
@@ -5374,7 +5385,7 @@ function removeUser(emailToRemove, role) {
 
     listRef.update(updateData)
         .then(() => {
-            showToast(`User removed from ${role}`, 'success');
+            showToast(`User removed from ${role} `, 'success');
             // Refresh the list in the modal
             return db.collection('lists').doc(currentListId).get();
         })
@@ -5387,7 +5398,7 @@ function removeUser(emailToRemove, role) {
         })
         .catch(error => {
             console.error('Error removing user:', error);
-            showToast(`Error removing user: ${error.message}`, 'error');
+            showToast(`Error removing user: ${error.message} `, 'error');
         });
 }
 
@@ -5435,7 +5446,7 @@ function addUserToList(role) {
             return listRef.update(updateData);
         })
         .then(() => {
-            showToast(`User added as ${role}`, 'success');
+            showToast(`User added as ${role} `, 'success');
             document.getElementById(inputId).value = '';
 
             // Refresh the current list data
@@ -5451,7 +5462,7 @@ function addUserToList(role) {
         })
         .catch(error => {
             console.error('Error adding user:', error);
-            showToast(`Error adding user: ${error.message}`, 'error');
+            showToast(`Error adding user: ${error.message} `, 'error');
         });
 }
 
@@ -5491,11 +5502,11 @@ function saveListEdit() {
             document.getElementById('listTitle').textContent = name;
             // Update the list in the UI
             loadList(currentListId);
-            document.getElementById('listEventDate').textContent = eventDate ? `Event date: ${eventDate}` : '';
+            document.getElementById('listEventDate').textContent = eventDate ? `Event date: ${eventDate} ` : '';
         })
         .catch(error => {
             console.error('Error updating list:', error);
-            showToast(`Error updating list: ${error.message}`, 'error');
+            showToast(`Error updating list: ${error.message} `, 'error');
         });
 }
 
@@ -5509,7 +5520,7 @@ function copyShareLink(type) {
 
         const url = generateShareUrl(type);
         copyToClipboard(url);
-        console.log(`Share link generated for type: ${type}`);
+        console.log(`Share link generated for type: ${type} `);
     } catch (error) {
         console.error('Error generating share link:', error);
         showToast('Error generating share link', 'error');
@@ -5593,7 +5604,7 @@ function generateShareUrl(type) {
         }
 
         const baseUrl = window.location.origin + window.location.pathname;
-        const shareUrl = `${baseUrl}?list=${encodeURIComponent(currentListId)}&role=${encodeURIComponent(type)}`;
+        const shareUrl = `${baseUrl}?list = ${encodeURIComponent(currentListId)}& role=${encodeURIComponent(type)} `;
 
         console.log(`Generated share URL for ${type} role`);
         return shareUrl;
@@ -5623,7 +5634,7 @@ async function nativeShareList(type = 'viewer') {
         const shareUrl = generateShareUrl(type);
         const listTitle = currentList?.name || 'Wishlist';
         const accessType = type === 'collaborator' ? 'with edit access' : 'with view-only access';
-        const listDescription = currentList?.description || `Check out my wishlist ${accessType}!`;
+        const listDescription = currentList?.description || `Check out my wishlist ${accessType} !`;
 
         const shareData = {
             title: listTitle,
@@ -5701,7 +5712,7 @@ function generateQRCode(type) {
                     correctLevel: QRCode.CorrectLevel.H
                 });
                 container.classList.remove('hidden');
-                console.log(`QR code generated for type: ${type}`);
+                console.log(`QR code generated for type: ${type} `);
             } catch (error) {
                 console.error("Error generating QR code:", error);
                 showFallbackQRCode(url, container, qrDiv);
@@ -5744,10 +5755,10 @@ function showFallbackQRCode(url, container, canvas) {
 
         // Show the URL as text
         fallbackElement.innerHTML = `
-            <p>QR Code generation is unavailable.</p>
+                < p > QR Code generation is unavailable.</p >
             <p>Share this URL instead:</p>
             <div class="share-url">${escapeHtml(url)}</div>
-            <button class="btn btn-primary" onclick="copyToClipboard('${url.replace(/'/g, "\\'")}')">Copy URL</button>
+            <button class="btn btn-primary" onclick="copyToClipboard('${url.replace(/'/g, "\\'")}') ">Copy URL</button>
         `;
 
         // Show the container
@@ -5768,7 +5779,7 @@ function emailShareLink(type) {
         }
 
         const url = generateShareUrl(type);
-        const subject = encodeURIComponent(`Check out this wishlist: ${currentList.name}`);
+        const subject = encodeURIComponent(`Check out this wishlist: ${currentList.name} `);
         const body = encodeURIComponent(`I'd like to share this wishlist with you:\n\n${url}`);
 
         console.log(`Email share link generated for type: ${type}`);
