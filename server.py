@@ -15,7 +15,8 @@ import http.server
 import socketserver
 import sys
 import os
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
+import urllib.request
 
 # Global counter for request logs
 request_log_counter = 0
@@ -24,7 +25,7 @@ request_log_counter = 0
 HEADER_LINES = []
 
 class CORSHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
-    """HTTP Request Handler with CORS support"""
+    """HTTP Request Handler with CORS support and proxy endpoint"""
     
     def end_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -39,6 +40,52 @@ class CORSHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         """Handle preflight OPTIONS requests"""
         self.send_response(200)
         self.end_headers()
+    
+    def do_GET(self):
+        """Handle GET requests, including proxy endpoint"""
+        # Check if this is a proxy request
+        if self.path.startswith('/api/proxy?url='):
+            self.handle_proxy_request()
+        else:
+            # Normal file serving
+            super().do_GET()
+    
+    def handle_proxy_request(self):
+        """Proxy requests to external URLs to bypass CORS"""
+        try:
+            # Extract the URL parameter
+            url_param = self.path.split('url=', 1)[1] if 'url=' in self.path else None
+            if not url_param:
+                self.send_error(400, 'Missing URL parameter')
+                return
+            
+            target_url = unquote(url_param)
+            
+            # Create request with proper headers
+            req = urllib.request.Request(
+                target_url,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1'
+                }
+            )
+            
+            # Fetch the content
+            with urllib.request.urlopen(req, timeout=15) as response:
+                content = response.read()
+                
+                # Send response
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Content-Length', len(content))
+                self.end_headers()
+                self.wfile.write(content)
+                
+        except Exception as e:
+            self.send_error(500, f'Proxy error: {str(e)}')
     
     def guess_type(self, path):
         """Guess the type of a file based on its URL."""
@@ -114,6 +161,7 @@ def main():
         f"🌐 Server running at: http://localhost:{port}",
         f"📱 Mobile access: http://{get_local_ip()}:{port}",
         f"\n🔧 Make sure to configure Firebase settings in firebase-config.js",
+        f"🔗 Proxy endpoint enabled: /api/proxy?url=<URL>",
         f"⚡ Press Ctrl+C to stop the server\n"
     ]
 
