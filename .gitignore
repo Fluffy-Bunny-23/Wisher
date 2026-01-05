@@ -6,3 +6,4 @@ amazon_ex_*
 firebase-debug.log
 firestore-debug.log
 /firestore.rules
+tmux-setup.sh
