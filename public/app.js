@@ -272,6 +272,26 @@ function setupAuthStateListener() {
     }
 
     try {
+        // Fast-track: Check for existing user synchronously before async listener
+        if (auth.currentUser && !currentUser) {
+            console.log('Fast auth detection: User already signed in synchronously');
+            console.log('User provider data:', auth.currentUser.providerData);
+            console.log('User details:', auth.currentUser.email, auth.currentUser.uid, auth.currentUser.providerData);
+
+            currentUser = auth.currentUser;
+
+            // Store auth state for recovery
+            localStorage.setItem('authState', JSON.stringify({
+                uid: auth.currentUser.uid,
+                email: auth.currentUser.email,
+                displayName: auth.currentUser.displayName,
+                photoURL: auth.currentUser.photoURL,
+                lastSignIn: new Date().toISOString()
+            }));
+
+            onUserSignedIn();
+        }
+
         const unsubscribe = auth.onAuthStateChanged(user => {
             console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
 
