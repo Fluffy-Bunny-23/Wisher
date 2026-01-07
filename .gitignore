@@ -1,9 +1,7 @@
-/.vercel
+node_modules
+opencode.json
+package.json
+package-lock.json
 /public/firebase-config.js
-/.trae
-amazon_ex_*
-/.firebase
 firebase-debug.log
-firestore-debug.log
-/firestore.rules
 tmux-setup.sh
