@@ -8,7 +8,7 @@ It serves static files and handles CORS for Firebase integration.
 Usage:
     python server.py [port]
     
-Default port is 8000.
+Default port is 7050.
 """
 
 import http.server
@@ -135,13 +135,13 @@ def is_port_in_use(port, host="127.0.0.1"):
 
 def main():
     # Get port from command line argument or use default
-    port = 8000
+    port = 7050
     if len(sys.argv) > 1:
         try:
             port = int(sys.argv[1])
         except ValueError:
             print(f"Invalid port number: {sys.argv[1]}")
-            print("Using default port 8000")
+            print("Using default port 7050")
     
     # Abort if port already in use
     if is_port_in_use(port):
