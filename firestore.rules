@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is the owner
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Helper function to check if user is a collaborator
+    function isCollaborator(collaborators) {
+      return request.auth.uid in collaborators;
+    }
+    
+    // Helper function to check user has read permission
+    function canRead(userId, collaborators) {
+      return isOwner(userId) || isCollaborator(collaborators);
+    }
+    
+    // Helper function to check user has write permission
+    function canWrite(userId, collaborators) {
+      return isOwner(userId);
+    }
+    
+    // Lists collection
+    match /lists/{listId} {
+      // Only authenticated users can create lists
+      allow create: if isAuthenticated();
+      
+      // Only owner can read or delete their own lists
+      allow read, delete: if isAuthenticated() && isOwner(resource.data.ownerId);
+      
+      // Only owner can update their own list
+      allow update: if isAuthenticated() && isOwner(resource.data.ownerId);
+      
+      // Items subcollection
+      match /items/{itemId} {
+        // Only authenticated users can create items in lists they own or collaborate on
+        allow create: if isAuthenticated() && canRead(resource.data.ownerId, resource.data.collaborators);
+        
+        // Only owner or collaborators can read items
+        allow read: if isAuthenticated() && canRead(resource.data.ownerId, resource.data.collaborators);
+        
+        // Only owner can update or delete items
+        allow update, delete: if isAuthenticated() && isOwner(resource.data.ownerId);
+      }
+      
+      // Collaborators subcollection
+      match /collaborators/{collaboratorId} {
+        // Only owner can add collaborators
+        allow create, delete: if isAuthenticated() && isOwner(resource.data.ownerId);
+        
+        // Only owner can read collaborators
+        allow read: if isAuthenticated() && isOwner(resource.data.ownerId);
+        
+        // No updates to collaborator records - delete and recreate instead
+        allow update: if false;
+      }
+    }
+    
+    // User preferences collection (optional, for future use)
+    match /userPreferences/{userId} {
+      // Users can read their own preferences
+      allow read: if isAuthenticated() && isOwner(userId);
+      
+      // Users can write their own preferences
+      allow write: if isAuthenticated() && isOwner(userId);
+    }
+  }
+}
