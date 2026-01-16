@@ -44,9 +44,65 @@ let lastReorderSnapshot = null;
 // Firebase services (initialized in firebase-config.js)
 // These are global variables, not redeclared here
 
+function checkUserPermission(list, userEmail) {
+    if (!list || !userEmail) return { canRead: false, canEdit: false };
+    
+    const isOwner = userEmail === list.owner;
+    const collaboratorsField = list.collaborators;
+    
+    let isCollaborator = false;
+    if (typeof collaboratorsField === 'string' && collaboratorsField) {
+        isCollaborator = collaboratorsField.includes(userEmail);
+    } else if (typeof collaboratorsField === 'object' && collaboratorsField !== null) {
+        isCollaborator = Object.values(collaboratorsField).includes(userEmail);
+    }
+    
+    const canRead = isOwner || isCollaborator;
+    const canEdit = isOwner || isCollaborator;
+    
+    return { isOwner, isCollaborator, canRead, canEdit };
+}
+
 function showSyncIndicator() {
     const el = document.getElementById('syncIndicator');
     if (el) el.classList.remove('hidden');
+}
+
+function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        // Ctrl/Cmd + N: New item
+        if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+            e.preventDefault();
+            const addItemBtn = document.getElementById('addItem');
+            if (addItemBtn && !addItemBtn.classList.contains('hidden')) {
+                addItemBtn.click();
+            }
+            return;
+        }
+        
+        // Ctrl/Cmd + F: Focus search
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+            e.preventDefault();
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.focus();
+            }
+            return;
+        }
+        
+        // Escape: Close modals
+        if (e.key === 'Escape') {
+            const openModals = document.querySelectorAll('.modal:not(.hidden)');
+            openModals.forEach(modal => {
+                modal.classList.add('hidden');
+            });
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar && !sidebar.classList.contains('hidden')) {
+                toggleSidebar();
+            }
+            return;
+        }
+    });
 }
 
 function hideSyncIndicator() {
@@ -6044,6 +6100,69 @@ function formatPrice(price) {
     if (price === null || price === undefined) return '';
     const numPrice = typeof price === 'number' ? price : parseFloat(price);
     return isNaN(numPrice) ? '' : numPrice.toFixed(2);
+}
+
+// Safety timeout constants (in milliseconds)
+const TIMEOUTS = {
+    SIGN_IN: 45000,
+    LIST_LOAD: 30000,
+    IMPORT_LIST: 30000,
+    AUTH_TOKEN_REFRESH: 300000,
+    UI_FEEDBACK: 10000
+};
+
+// Auto-save draft items to localStorage
+const DRAFT_STORAGE_KEY = 'itemDraft';
+
+function saveItemDraft() {
+    try {
+        const itemName = document.getElementById('itemName')?.value || '';
+        const itemURL = document.getElementById('itemURL')?.value || '';
+        const itemPrice = document.getElementById('itemPrice')?.value || '';
+        const itemDescription = document.getElementById('itemDescription')?.value || '';
+        
+        const draft = {
+            name: itemName,
+            url: itemURL,
+            price: itemPrice,
+            description: itemDescription,
+            savedAt: new Date().toISOString()
+        };
+        
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    } catch (error) {
+        console.error('Error saving item draft:', error);
+    }
+}
+
+function loadItemDraft() {
+    try {
+        const draftData = localStorage.getItem(DRAFT_STORAGE_KEY);
+        if (draftData) {
+            const draft = JSON.parse(draftData);
+            const itemName = document.getElementById('itemName');
+            const itemURL = document.getElementById('itemURL');
+            const itemPrice = document.getElementById('itemPrice');
+            const itemDescription = document.getElementById('itemDescription');
+            
+            if (itemName && draft.name) itemName.value = draft.name;
+            if (itemURL && draft.url) itemURL.value = draft.url;
+            if (itemPrice && draft.price) itemPrice.value = draft.price;
+            if (itemDescription && draft.description) itemDescription.value = draft.description;
+            
+            console.log('Draft loaded from', draft.savedAt);
+        }
+    } catch (error) {
+        console.error('Error loading item draft:', error);
+    }
+}
+
+function clearItemDraft() {
+    try {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch (error) {
+        console.error('Error clearing item draft:', error);
+    }
 }
 
 
