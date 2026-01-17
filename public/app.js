@@ -2803,14 +2803,6 @@ function createItemCard(item, position) {
                     <button class="icon-button" onclick="summarizeItem('${item.id}')" title="AI Summarize">
                         <span class="material-icons">psychology</span>
                     </button>
-<button class="icon-button" onclick="checkItemPrice('${item.id}')" title="Check Price & Availability">
-                        <span class="material-icons">price_check</span>
-                    </button>
-                    ${(item.originalPrice || item.discount || item.lastPriceCheck) ? `
-                        <button class="icon-button" onclick="clearPriceData('${item.id}')" title="Clear Price Data">
-                            <span class="material-icons">clear</span>
-                        </button>
-                    ` : ''}
                 ` : ''}
                 ${!item.bought ? `
                     <button class="icon-button" onclick="markAsBought('${item.id}')" title="Mark as bought">
@@ -2845,11 +2837,8 @@ function createItemCard(item, position) {
         </div>
         <div class="item-content">
             ${item.imageUrl ? `
-                <img src="${item.imageUrl}" alt="${escapeHtml(item.name)}" class="item-image" 
+                <img src="${item.imageUrl}" alt="${escapeHtml(item.name)}" class="item-image"
                      onerror="this.style.display='none'">
-            ` : ''}
-            ${item.availability && (item.availability.toLowerCase().includes('out of stock') || item.availability.toLowerCase().includes('unavailable') || item.availability.toLowerCase().includes('sold out')) ? `
-                <div class="out-of-stock-badge">Out of Stock</div>
             ` : ''}
             <div class="item-details">
                 ${item.description ? `
@@ -2857,24 +2846,7 @@ function createItemCard(item, position) {
                 ` : ''}
 
                 <div class="item-meta">
-                    ${item.originalPrice && item.price ? `
-                        <span class="item-price-sale">
-                            <span class="original-price">$${formatPrice(item.originalPrice)}</span>
-                            ${item.discount ? `<span class="discount-badge">-${item.discount}%</span>` : ''}
-                            <span class="sale-price">$${formatPrice(item.price)}</span>
-                        </span>
-                    ` : item.price ? `<span class="item-price">$${formatPrice(item.price)}</span>` : ''}
-                    ${item.availability ? `
-                        <span class="item-availability ${item.availability.toLowerCase().includes('out of stock') || item.availability.toLowerCase().includes('unavailable') ? 'out-of-stock' : 'in-stock'}">
-                            ${escapeHtml(item.availability)}
-                        </span>
-                    ` : ''}
-                    ${item.lastPriceCheck ? `
-                        <span class="last-price-check" title="Last checked">
-                            <span class="material-icons" style="font-size: 12px; vertical-align: middle;">update</span>
-                            ${formatDate(item.lastPriceCheck)}
-                        </span>
-                    ` : ''}
+                    ${item.price ? `<span class="item-price">$${formatPrice(item.price)}</span>` : ''}
                     ${item.bought && item.buyerName ? `
                         <span>Bought by: ${escapeHtml(item.buyerName)}</span>
                     ` : ''}
@@ -5240,244 +5212,6 @@ Description:`;
         return { description: "" }; // Return empty details on error
     }
 }
-
-async function checkItemPrice(itemId) {
-    try {
-        // Get the item details
-        const itemDoc = await db.collection('lists').doc(currentListId).collection('items').doc(itemId).get();
-        const item = itemDoc.data();
-        if (!item || !item.url) {
-            showToast('Item has no URL to check', 'error');
-            return;
-        }
-
-        // Detect if URL is Amazon
-        const isAmazon = item.url.includes('amazon.com') || item.url.includes('amazon.');
-
-        let result;
-
-        if (isAmazon) {
-            // DETERMINISTIC: Direct HTML parsing for Amazon
-            result = await parseAmazonPriceDirectly(item.url);
-        } else {
-            // AI-based for other sites
-            const listDoc = await db.collection('lists').doc(currentListId).get();
-            const list = listDoc.data();
-            const apiKey = list.geminiApiKey;
-
-            if (!apiKey) {
-                showToast('Gemini API Key required for non-Amazon price check', 'error');
-                return;
-            }
-
-            showLoading();
-            showToast('Checking price and availability...', 'info');
-
-            const PROMPT = `Extract the current price and availability from this URL: ${item.url}. 
-            Return ONLY a JSON object with the following keys:
-            - "price": The numeric price (e.g., 29.99). If not found, return null.
-            - "availability": A short string describing availability (e.g., "In Stock", "Out of Stock", "Pre-order"). If not found, return null.
-            
-            JSON:`;
-
-            const generatedText = await callGemini(PROMPT, apiKey);
-            const jsonString = generatedText.replace(/```json\n?|\n?```/g, '').trim();
-            result = JSON.parse(jsonString);
-        }
-
-        if (result) {
-            const updateData = {
-                lastPriceCheck: firebase.firestore.FieldValue.serverTimestamp()
-            };
-
-            if (result.price !== null && result.price !== undefined) {
-                updateData.price = result.price;
-            }
-
-            // Update or clear sale data
-            if (result.originalPrice !== null && result.originalPrice !== undefined) {
-                updateData.originalPrice = result.originalPrice;
-            } else {
-                updateData.originalPrice = firebase.firestore.FieldValue.delete();
-            }
-
-            if (result.discount !== null && result.discount !== undefined) {
-                updateData.discount = result.discount;
-            } else {
-                updateData.discount = firebase.firestore.FieldValue.delete();
-            }
-
-            if (result.availability) {
-                updateData.availability = result.availability;
-            }
-
-            await db.collection('lists').doc(currentListId).collection('items').doc(itemId).update(updateData);
-
-            showToast('Price and availability updated!', 'success');
-            await loadListItems(currentListId);
-        } else {
-            showToast('Could not extract price information', 'warning');
-        }
-
-    } catch (error) {
-        console.error('Error checking price:', error);
-        showToast('Error checking price: ' + error.message, 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-async function clearPriceData(itemId) {
-    try {
-        if (!confirm('Are you sure you want to clear all price checking data? This will remove sale information, discount percentages, and price check timestamps, leaving only the original price set by the creator.')) {
-            return;
-        }
-
-        showLoading();
-        
-        // Get the current item to preserve the original creator-set price
-        const itemDoc = await db.collection('lists').doc(currentListId).collection('items').doc(itemId).get();
-        const item = itemDoc.data();
-        
-        if (!item) {
-            showToast('Item not found', 'error');
-            return;
-        }
-
-        // Prepare update data to clear price checking fields
-        const updateData = {
-            // Remove price checking fields
-            originalPrice: firebase.firestore.FieldValue.delete(),
-            discount: firebase.firestore.FieldValue.delete(),
-            lastPriceCheck: firebase.firestore.FieldValue.delete(),
-            availability: firebase.firestore.FieldValue.delete(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-
-        // If there's a current price that was set by price checking, 
-        // we might want to keep it or clear it depending on requirements
-        // For now, we'll keep the current price as it might be the creator-set price
-        
-        await db.collection('lists').doc(currentListId).collection('items').doc(itemId).update(updateData);
-
-        showToast('Price checking data cleared successfully!', 'success');
-        await loadListItems(currentListId);
-        
-    } catch (error) {
-        console.error('Error clearing price data:', error);
-        showToast('Error clearing price data: ' + error.message, 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-// NEW FUNCTION: Direct Amazon price parsing via proxy
-async function parseAmazonPriceDirectly(url) {
-    try {
-        showLoading();
-        showToast('Fetching Amazon page for price extraction...', 'info');
-
-        // Use proxy endpoint to bypass CORS
-        const proxyUrl = `${window.location.origin}/api/proxy?url=${encodeURIComponent(url)}`;
-
-        // Fetch the Amazon page HTML through proxy
-        const response = await fetch(proxyUrl);
-
-        if (!response.ok) {
-            throw new Error(`Failed to fetch Amazon page: ${response.status}`);
-        }
-
-        const html = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-
-        const result = {
-            price: null,
-            originalPrice: null,
-            discount: null,
-            availability: null
-        };
-
-        // FIXED: Extract current price - PRIORITIZE specific selectors for actual current/sale price
-        // These are ordered from most specific (sale price) to least specific
-        const currentPriceElement = doc.querySelector('.priceToPay .a-offscreen') ||
-            doc.querySelector('.a-price[data-a-color="price"] .a-offscreen') ||
-            doc.querySelector('.apexPriceToPay .a-offscreen') ||
-            doc.querySelector('[data-cy="price-recipe"] .a-price .a-offscreen') ||
-            doc.querySelector('.a-price:not(.a-text-price) .a-offscreen') ||
-            doc.querySelector('.a-price .a-offscreen');
-
-        if (currentPriceElement) {
-            let priceText = currentPriceElement.textContent.trim();
-            priceText = priceText.replace(/[^\d.,]/g, '');
-            const parsedPrice = parseFloat(priceText);
-            // FIXED: Add NaN validation
-            result.price = isNaN(parsedPrice) ? null : parsedPrice;
-        }
-
-        // FIXED: Extract original/list price - more specific selectors for strikethrough prices
-        const originalPriceElement = doc.querySelector('.a-price.a-text-price .a-offscreen') ||
-            doc.querySelector('[data-a-strike="true"] .a-offscreen') ||
-            doc.querySelector('.basisPrice .a-offscreen') ||
-            doc.querySelector('[class*="list-price"] .a-offscreen');
-
-        if (originalPriceElement) {
-            let originalPriceText = originalPriceElement.textContent.trim();
-            originalPriceText = originalPriceText.replace(/[^\d.,]/g, '');
-            const parsedOriginalPrice = parseFloat(originalPriceText);
-            // FIXED: Add NaN validation
-            result.originalPrice = isNaN(parsedOriginalPrice) ? null : parsedOriginalPrice;
-        }
-
-        // FIXED: Validate sale logic - originalPrice should be higher than price
-        if (result.originalPrice !== null && result.price !== null) {
-            if (result.originalPrice <= result.price) {
-                // Invalid data - original should be higher than current
-                // Likely extracted in wrong order, so clear original price
-                console.warn('Original price is not higher than current price. Clearing sale data.');
-                result.originalPrice = null;
-            } else {
-                // Calculate discount percentage if not already found
-                if (!result.discount) {
-                    const discountPercent = Math.round(((result.originalPrice - result.price) / result.originalPrice) * 100);
-                    result.discount = discountPercent;
-                }
-            }
-        }
-
-        // Extract discount percentage from page
-        const discountElement = doc.querySelector('.savingsPercentage') ||
-            doc.querySelector('[class*="savingPriceOverride"]') ||
-            doc.querySelector('[class*="savings"]');
-
-        if (discountElement) {
-            let discountText = discountElement.textContent.trim();
-            const discountMatch = discountText.match(/-?(\d+)%/);
-            if (discountMatch) {
-                result.discount = parseInt(discountMatch[1]);
-            }
-        }
-
-        // Extract availability
-        const availabilityElement = doc.querySelector('[data-cy="availability-recipe"]') ||
-            doc.querySelector('#availability') ||
-            doc.querySelector('[class*="availability"]');
-
-        if (availabilityElement) {
-            result.availability = availabilityElement.textContent.trim();
-        }
-
-        console.log('Parsed Amazon price data:', result);
-        return result;
-
-    } catch (error) {
-        console.error('Error parsing Amazon price directly:', error);
-        throw error;
-    }
-}
-
-
-
 
 // Share functions
 function setupShareButtons() {
