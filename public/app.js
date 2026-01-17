@@ -1925,7 +1925,9 @@ async function loadListItems(listId) {
             const shouldDeleteNotes = confirm(
                 `Found ${itemsWithNotes.length} item(s) with secondary descriptions (notes). ` +
                 `These will be removed from the application. ` +
-                `Would you like to delete these notes now?\n\n` +
+                `Would you like to delete these notes now?
+
+` +
                 `Items with notes:\n` +
                 itemsWithNotes.map(item => `• ${item.name}`).join('\n')
             );
@@ -3055,7 +3057,9 @@ function showGroupInfo(groupId) {
             if (!doc.exists) { showToast('Group not found', 'error'); return; }
             const g = doc.data();
             // Use alert as a lightweight info view for now
-            const txt = `Group: ${g.name || 'Untitled'}\n\n${g.description || ''}`;
+            const txt = `Group: ${g.name || 'Untitled'}
+
+${g.description || ''}`;
             alert(txt);
         }).catch(err => console.error('Error loading group info:', err));
     } catch (err) {
@@ -4560,7 +4564,9 @@ async function deleteComment(itemId, commentId, commentIndex) {
         }
 
         // Confirm deletion
-        const confirmMessage = `Are you sure you want to delete this comment?\n\n"${comment.text.substring(0, 100)}${comment.text.length > 100 ? '...' : ''}"`;
+        const confirmMessage = `Are you sure you want to delete this comment?
+
+"${comment.text.substring(0, 100)}${comment.text.length > 100 ? '...' : ''}"`;
         if (!confirm(confirmMessage)) {
             return;
         }
@@ -6010,7 +6016,9 @@ function emailShareLink(type) {
 
         const url = generateShareUrl(type);
         const subject = encodeURIComponent(`Check out this wishlist: ${currentList.name} `);
-        const body = encodeURIComponent(`I'd like to share this wishlist with you:\n\n${url}`);
+        const body = encodeURIComponent(`I'd like to share this wishlist with you:
+
+${url}`);
 
         console.log(`Email share link generated for type: ${type}`);
         window.location.href = `mailto:?subject=${subject}&body=${body}`;
@@ -6871,7 +6879,9 @@ function emailShareLink(type) {
         }
 
         const subject = encodeURIComponent(`Check out this wishlist: ${currentList.name}`);
-        const body = encodeURIComponent(`I'd like to share this wishlist with you:\n\n${url}`);
+        const body = encodeURIComponent(`I'd like to share this wishlist with you:
+
+${url}`);
 
         console.log(`Email share link generated for type: ${type}`);
         window.location.href = `mailto:?subject=${subject}&body=${body}`;
