@@ -2,7 +2,12 @@
 # https://github.com/firebase/firebase-tools
 
 name: Deploy to Firebase Hosting on PR
-on: pull_request
+on:
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'LICENSE'
+      - '.gitignore'
 permissions:
   checks: write
   contents: read
@@ -13,6 +18,48 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Test JavaScript files
+        run: |
+          echo "Running JavaScript syntax validation..."
+          
+          # Function to check JavaScript syntax
+          check_js_file() {
+            local file=$1
+            echo "Checking $file..."
+            node -c "$file" || {
+              echo "❌ Syntax error in $file"
+              return 1
+            }
+            echo "✅ $file is valid"
+          }
+          
+          # Check all JavaScript files
+          EXIT_CODE=0
+          
+          # Check public directory (recursively)
+          if [ -d public ]; then
+            while IFS= read -r -d '' file; do
+              check_js_file "$file" || EXIT_CODE=1
+            done < <(find public -type f -name '*.js' -print0)
+          fi
+          
+          # Check amazon directory (recursively)
+          if [ -d amazon ]; then
+            while IFS= read -r -d '' file; do
+              check_js_file "$file" || EXIT_CODE=1
+            done < <(find amazon -type f -name '*.js' -print0)
+          fi
+          
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "✅ All JavaScript files passed syntax validation"
+          else
+            echo "❌ Some JavaScript files failed syntax validation"
+            exit 1
+          fi
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
