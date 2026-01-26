@@ -40,17 +40,19 @@ jobs:
           # Check all JavaScript files
           EXIT_CODE=0
           
-          # Check public directory
-          shopt -s nullglob
-          for file in public/*.js; do
-            check_js_file "$file" || EXIT_CODE=1
-          done
+          # Check public directory (recursively)
+          if [ -d public ]; then
+            while IFS= read -r -d '' file; do
+              check_js_file "$file" || EXIT_CODE=1
+            done < <(find public -type f -name '*.js' -print0)
+          fi
           
-          # Check amazon directory
-          for file in amazon/*.js; do
-            check_js_file "$file" || EXIT_CODE=1
-          done
-          shopt -u nullglob
+          # Check amazon directory (recursively)
+          if [ -d amazon ]; then
+            while IFS= read -r -d '' file; do
+              check_js_file "$file" || EXIT_CODE=1
+            done < <(find amazon -type f -name '*.js' -print0)
+          fi
           
           if [ $EXIT_CODE -eq 0 ]; then
             echo "✅ All JavaScript files passed syntax validation"
