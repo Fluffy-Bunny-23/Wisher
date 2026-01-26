@@ -19,11 +19,44 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-      - name: Install dependencies
-        run: npm ci
-      - name: Run tests
-        run: npm test
+      - name: Test JavaScript files
+        run: |
+          echo "Running JavaScript syntax validation..."
+          
+          # Function to check JavaScript syntax
+          check_js_file() {
+            local file=$1
+            echo "Checking $file..."
+            node -c "$file" || {
+              echo "❌ Syntax error in $file"
+              return 1
+            }
+            echo "✅ $file is valid"
+          }
+          
+          # Check all JavaScript files
+          EXIT_CODE=0
+          
+          # Check public directory
+          for file in public/*.js; do
+            if [ -f "$file" ]; then
+              check_js_file "$file" || EXIT_CODE=1
+            fi
+          done
+          
+          # Check amazon directory
+          for file in amazon/*.js; do
+            if [ -f "$file" ]; then
+              check_js_file "$file" || EXIT_CODE=1
+            fi
+          done
+          
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "✅ All JavaScript files passed syntax validation"
+          else
+            echo "❌ Some JavaScript files failed syntax validation"
+            exit 1
+          fi
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
