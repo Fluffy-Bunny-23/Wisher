@@ -1,7 +1,6 @@
 node_modules
+coverage
 opencode.json
-package.json
-package-lock.json
 /public/firebase-config.js
 firebase-debug.log
 tmux-setup.sh
