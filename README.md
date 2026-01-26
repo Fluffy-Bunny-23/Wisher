@@ -111,12 +111,14 @@ A modern, feature-rich wishlist application built with HTML, CSS, JavaScript, an
 
 ## Contributing
 
-This is a complete, production-ready application. Feel free to:
+Feel free to:
 
 1. Fork the repository
 2. Add new features
 3. Submit pull requests
 4. Report issues
+   
+I will try my best to merge PRs and look at issues, and try to fix them, but nobody is perfect, and I have a lot of things to do.
 
 ## Support
 
