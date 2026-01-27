@@ -1459,45 +1459,6 @@ p {
   margin-bottom: 12px;
 }
 
-/* Price Range Inputs */
-.price-range-inputs {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.price-input {
-  width: 100px;
-  padding: 8px 12px;
-  border: 1px solid var(--md-sys-color-outline);
-  border-radius: var(--md-sys-shape-corner-small);
-  background-color: var(--md-sys-color-surface);
-  color: var(--md-sys-color-on-surface);
-  font-family: var(--md-sys-typescale-body-large-font-family);
-  font-size: var(--md-sys-typescale-body-large-font-size);
-  font-weight: var(--md-sys-typescale-body-large-font-weight);
-  line-height: var(--md-sys-typescale-body-large-line-height);
-  letter-spacing: var(--md-sys-typescale-body-large-letter-spacing);
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
-  outline: none;
-}
-
-.price-input:hover {
-  border-color: var(--md-sys-color-on-surface);
-  background-color: var(--md-sys-color-surface-container);
-}
-
-.price-input:focus {
-  border-color: var(--md-sys-color-primary);
-  background-color: var(--md-sys-color-surface-container-high);
-  box-shadow: 0 0 0 2px var(--md-sys-color-primary);
-}
-
-.price-range-inputs span {
-  color: var(--md-sys-color-on-surface-variant);
-  font-weight: 500;
-}
-
 /* Checkbox Groups */
 .checkbox-group {
   display: flex;
@@ -1578,19 +1539,6 @@ p {
 
   .filter-toggle-btn {
     justify-content: center;
-  }
-
-  .price-range-inputs {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .price-range-inputs span {
-    text-align: center;
-  }
-
-  .price-input {
-    width: 100%;
   }
 
   .filter-actions {
@@ -1868,11 +1816,6 @@ input:checked+.slider:before {
   align-items: center;
   font-size: 0.875rem;
   color: var(--text-secondary);
-}
-
-.item-price {
-  font-weight: 500;
-  color: var(--primary-color);
 }
 
 .item-position {
@@ -2424,13 +2367,6 @@ input:checked+.slider:before {
 
 .info-item-description {
   color: var(--text-secondary);
-  margin-bottom: 8px;
-}
-
-.info-item-price {
-  font-weight: 500;
-  color: var(--primary-color);
-  font-size: 1.125rem;
   margin-bottom: 8px;
 }
 
@@ -3157,10 +3093,6 @@ input:checked+.slider:before {
     gap: 4px;
   }
 
-  .item-price {
-    font-size: 0.9rem;
-  }
-
   .modal-content {
     width: 98%;
     margin: 5px;
@@ -3401,4 +3333,3 @@ input:checked+.slider:before {
   position: relative;
   /* Ensure absolute positioning works for badge */
 }
-

@@ -139,15 +139,6 @@
                                 
                                 <div class="filter-panel-body">
                                     <div class="filter-section">
-                                        <h4>Price Range</h4>
-                                        <div class="price-range-inputs">
-                                            <input type="number" id="minPriceInput" placeholder="Min" class="price-input">
-                                            <span>-</span>
-                                            <input type="number" id="maxPriceInput" placeholder="Max" class="price-input">
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="filter-section">
                                         <h4>Purchase Status</h4>
                                         <div class="checkbox-group">
                                             <label class="checkbox-label">
@@ -175,8 +166,6 @@
                             <label for="sortSelect">Sort by:</label>
                             <select id="sortSelect" class="sort-select">
                                 <option value="creators">Creator's Order</option>
-                                <option value="price-high">Price (High to Low)</option>
-                                <option value="price-low">Price (Low to High)</option>
                                 <option value="alphabetical">Alphabetical</option>
                             </select>
                         </div>
@@ -255,11 +244,6 @@
                     </div>
                     
 
-                    
-                    <div class="input-group">
-                        <label for="itemPrice">Price</label>
-                        <input type="number" id="itemPrice" step="0.01" min="0">
-                    </div>
                     
                     <div class="input-group">
                         <label for="itemPosition">Position (e.g., 3.1 or 7)</label>
@@ -546,7 +530,6 @@
                     </div>
                     <h4 id="infoItemName" class="info-item-name"></h4>
                     <p id="infoItemDescription" class="info-item-description"></p>
-                    <div id="infoItemPrice" class="info-item-price"></div>
 
                     <div class="info-item-actions">
                         <a id="infoItemLink" class="btn btn-primary" href="" target="_blank">

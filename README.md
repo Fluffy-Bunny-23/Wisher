@@ -26,7 +26,7 @@ A modern, feature-rich wishlist application built with HTML, CSS, JavaScript, an
 -  **List Settings** - Manage list name, description, and event dates
 
 ### Item Features
--  **Rich Item Details** - Name, description, URL, image, price, and notes
+-  **Rich Item Details** - Name, description, URL, image, and notes
 -  **Markdown Support** - Rich text formatting in notes
 -  **Drag & Drop Reordering** - Intuitive item positioning
 -  **Quick Jump** - Navigate to specific item positions
@@ -65,7 +65,6 @@ A modern, feature-rich wishlist application built with HTML, CSS, JavaScript, an
    - **Description** (brief overview)
    - **Image URL** (product photo)
    - **Notes** (supports markdown formatting)
-   - **Price** (optional)
    - **Position** (for ordering)
 
 ### Sharing Lists

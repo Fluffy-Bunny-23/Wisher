@@ -26,31 +26,6 @@
   productData.link = window.location.href;
   console.log('✅ Product URL:', productData.link);
 
-  // Extract price
-  const priceSelectors = [
-    '.a-price .a-offscreen',
-    '.a-color-price',
-    '[data-cy="price-recipe"] .a-price .a-offscreen',
-    '.a-price-whole',
-    '.priceToPay .a-offscreen',
-    '[id*="price"] .a-offscreen',
-    '.apexPriceToPay .a-offscreen'
-  ];
-
-  for (const selector of priceSelectors) {
-    const element = document.querySelector(selector);
-    if (element && element.textContent.trim()) {
-      let priceText = element.textContent.trim();
-      // Clean up price text
-      priceText = priceText.replace(/[^\d.,]/g, '');
-      if (priceText) {
-        productData.price = priceText;
-        console.log('✅ Found price:', productData.price);
-        break;
-      }
-    }
-  }
-
   // Extract description/byline
   const bylineSelectors = [
     '#bylineInfo',
