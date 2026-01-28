@@ -39,7 +39,7 @@ All critical, high, and medium-priority bugs have been fixed. Easy and medium fe
   - `saveItemDraft()` - auto-saves item form on input
   - `loadItemDraft()` - restores draft when opening modal
   - `clearItemDraft()` - clears draft after save
-  - Saves: name, URL, price, description, timestamp
+  - Saves: name, URL, description, timestamp
   - Uses localStorage with key `itemDraft`
 
 ## Code Quality Improvements

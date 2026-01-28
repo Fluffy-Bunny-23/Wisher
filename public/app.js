@@ -17,8 +17,6 @@ let viewedListsGlobal = [];
 // Search and filter state
 let searchQuery = '';
 let activeFilters = {
-    minPrice: null,
-    maxPrice: null,
     showAvailable: true,
     showBought: false
 };
@@ -1006,16 +1004,6 @@ function setupEventListeners() {
 
 
 
-        // Price range inputs
-        const minPriceInput = document.getElementById('minPriceInput');
-        const maxPriceInput = document.getElementById('maxPriceInput');
-        if (minPriceInput) {
-            minPriceInput.addEventListener('input', handlePriceInput);
-        }
-        if (maxPriceInput) {
-            maxPriceInput.addEventListener('input', handlePriceInput);
-        }
-
         // Purchase status checkboxes
         const filterAvailable = document.getElementById('filterAvailable');
         const filterBought = document.getElementById('filterBought');
@@ -1916,7 +1904,6 @@ async function loadListItems(listId) {
             if (itemData.notes && itemData.notes.trim() !== '') {
                 itemsWithNotes.push({ id: doc.id, name: itemData.name, notes: itemData.notes });
             }
-
             items.push({ id: doc.id, ...itemData });
         });
 
@@ -1934,9 +1921,9 @@ async function loadListItems(listId) {
 
             if (shouldDeleteNotes) {
                 // Delete notes from all items in database
-                const batch = db.batch();
+                const batch = database.batch();
                 itemsWithNotes.forEach(item => {
-                    const itemRef = db.collection('lists').doc(listId).collection('items').doc(item.id);
+                    const itemRef = database.collection('lists').doc(listId).collection('items').doc(item.id);
                     batch.update(itemRef, { notes: firebase.firestore.FieldValue.delete() });
                 });
 
@@ -2418,21 +2405,12 @@ function toggleFilterPanel() {
     }
 }
 
-function handlePriceInput() {
-    const minPrice = document.getElementById('minPriceInput').value;
-    const maxPrice = document.getElementById('maxPriceInput').value;
-
-    activeFilters.minPrice = minPrice ? parseFloat(minPrice) : null;
-    activeFilters.maxPrice = maxPrice ? parseFloat(maxPrice) : null;
-}
-
 function handleStatusFilter() {
     activeFilters.showAvailable = document.getElementById('filterAvailable').checked;
     activeFilters.showBought = document.getElementById('filterBought').checked;
 }
 
 function applyFilters() {
-    handlePriceInput();
     handleStatusFilter();
 
     updateActiveFiltersCount();
@@ -2443,16 +2421,12 @@ function applyFilters() {
 function clearAllFilters() {
     // Reset filter state
     activeFilters = {
-        minPrice: null,
-        maxPrice: null,
         showAvailable: true,
         showBought: false,
         categories: []
     };
 
     // Reset UI
-    document.getElementById('minPriceInput').value = '';
-    document.getElementById('maxPriceInput').value = '';
     document.getElementById('filterAvailable').checked = true;
     document.getElementById('filterBought').checked = false;
 
@@ -2466,8 +2440,6 @@ function clearAllFilters() {
 
 function updateActiveFiltersCount() {
     let count = 0;
-    if (activeFilters.minPrice !== null) count++;
-    if (activeFilters.maxPrice !== null) count++;
     if (!activeFilters.showAvailable) count++;
     if (activeFilters.showBought) count++;
 
@@ -2490,21 +2462,6 @@ function applySearchAndFilters() {
         filteredItems = filteredItems.filter(item => {
             const searchText = `${item.name} ${item.description || ''}`.toLowerCase();
             return searchText.includes(searchQuery);
-        });
-    }
-
-    // Apply price filter
-    if (activeFilters.minPrice !== null) {
-        filteredItems = filteredItems.filter(item => {
-            const price = parseFloat(item.price) || 0;
-            return price >= activeFilters.minPrice;
-        });
-    }
-
-    if (activeFilters.maxPrice !== null) {
-        filteredItems = filteredItems.filter(item => {
-            const price = parseFloat(item.price) || 0;
-            return price <= activeFilters.maxPrice;
         });
     }
 
@@ -2531,22 +2488,6 @@ function sortItems(items, groups = {}) {
     let sortedItems = [...items];
 
     switch (currentSortMethod) {
-        case 'price-high':
-            sortedItems.sort((a, b) => {
-                const priceA = parseFloat(a.price) || 0;
-                const priceB = parseFloat(b.price) || 0;
-                return priceB - priceA; // High to low
-            });
-            break;
-
-        case 'price-low':
-            sortedItems.sort((a, b) => {
-                const priceA = parseFloat(a.price) || 0;
-                const priceB = parseFloat(b.price) || 0;
-                return priceA - priceB; // Low to high
-            });
-            break;
-
         case 'alphabetical':
             sortedItems.sort((a, b) => {
                 const nameA = (a.name || '').toLowerCase();
@@ -2846,7 +2787,6 @@ function createItemCard(item, position) {
                 ` : ''}
 
                 <div class="item-meta">
-                    ${item.price ? `<span class="item-price">$${formatPrice(item.price)}</span>` : ''}
                     ${item.bought && item.buyerName ? `
                         <span>Bought by: ${escapeHtml(item.buyerName)}</span>
                     ` : ''}
@@ -3995,7 +3935,6 @@ function editItem(itemId) {
                 document.getElementById('itemDescription').value = item.description || '';
                 document.getElementById('itemImageURL').value = item.imageUrl || '';
 
-                document.getElementById('itemPrice').value = item.price || '';
                 document.getElementById('itemPosition').value = item.position || '';
 
                 // Add URL validation for edit mode
@@ -4864,7 +4803,6 @@ async function saveItem() {
         description: document.getElementById('itemDescription').value,
         imageUrl: document.getElementById('itemImageURL').value,
 
-        price: document.getElementById('itemPrice').value || null,
         position: desiredPosition,
         bought: false,
         groupId: document.getElementById('itemGroup').value || null,
@@ -5286,7 +5224,6 @@ function showInfoModal(item) {
     document.getElementById('infoItemImage').alt = item.name;
     document.getElementById('infoItemName').textContent = item.name;
     document.getElementById('infoItemDescription').textContent = item.description || 'No description';
-    document.getElementById('infoItemPrice').textContent = item.price ? `$${item.price} ` : 'No price';
 
     // Set up the link button if a URL exists
     const linkBtn = document.getElementById('infoItemLink');
@@ -5837,13 +5774,6 @@ function toggleExtensiveMovingButtons() {
     }
 }
 
-// Helper function to format prices consistently
-function formatPrice(price) {
-    if (price === null || price === undefined) return '';
-    const numPrice = typeof price === 'number' ? price : parseFloat(price);
-    return isNaN(numPrice) ? '' : numPrice.toFixed(2);
-}
-
 // Safety timeout constants (in milliseconds)
 const TIMEOUTS = {
     SIGN_IN: 45000,
@@ -5860,13 +5790,11 @@ function saveItemDraft() {
     try {
         const itemName = document.getElementById('itemName')?.value || '';
         const itemURL = document.getElementById('itemURL')?.value || '';
-        const itemPrice = document.getElementById('itemPrice')?.value || '';
         const itemDescription = document.getElementById('itemDescription')?.value || '';
         
         const draft = {
             name: itemName,
             url: itemURL,
-            price: itemPrice,
             description: itemDescription,
             savedAt: new Date().toISOString()
         };
@@ -5884,12 +5812,10 @@ function loadItemDraft() {
             const draft = JSON.parse(draftData);
             const itemName = document.getElementById('itemName');
             const itemURL = document.getElementById('itemURL');
-            const itemPrice = document.getElementById('itemPrice');
             const itemDescription = document.getElementById('itemDescription');
             
             if (itemName && draft.name) itemName.value = draft.name;
             if (itemURL && draft.url) itemURL.value = draft.url;
-            if (itemPrice && draft.price) itemPrice.value = draft.price;
             if (itemDescription && draft.description) itemDescription.value = draft.description;
             
             console.log('Draft loaded from', draft.savedAt);
@@ -6182,7 +6108,6 @@ function showInfoModal(item) {
     document.getElementById('infoItemImage').alt = item.name;
     document.getElementById('infoItemName').textContent = item.name;
     document.getElementById('infoItemDescription').textContent = item.description || 'No description';
-    document.getElementById('infoItemPrice').textContent = item.price ? `$${item.price}` : 'No price';
 
 
     // Set up the link button if a URL exists
@@ -6493,7 +6418,6 @@ async function importList() {
                             url: itemData.link || '',
                             description: description,
                             imageUrl: itemData.imageUrl || '',
-                            price: itemData.price || null,
                             position: currentSize + i + 1, // More efficient position calculation
                             bought: false,
                             createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -6815,4 +6739,3 @@ function jumpToItem(itemNumber) {
         }, 2000);
     }
 }
-

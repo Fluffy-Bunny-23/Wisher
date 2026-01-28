@@ -40,7 +40,6 @@
 
     // Initialize variables
     let description = '';
-    let price = '';
     let imageUrl = '';
 
     // Try multiple container strategies
@@ -88,37 +87,6 @@
       if (bylineElement && bylineElement.querySelector('[id^="item-byline-"]')) {
         description = bylineElement.querySelector('[id^="item-byline-"]').textContent.trim();
       }
-    }
-
-    // Enhanced price extraction
-    let priceElement = null;
-    const searchContainers = itemContainer ? [itemContainer] : containers;
-    
-    for (const container of searchContainers) {
-      if (!container) continue;
-      
-      const priceSelectors = [
-        '.a-price .a-offscreen',
-        '.a-color-price',
-        '[data-a-color="price"]',
-        '.a-price-whole',
-        '.price',
-        '[class*="price"]',
-        '[id*="price"]'
-      ];
-      
-      for (const selector of priceSelectors) {
-        priceElement = container.querySelector(selector);
-        if (priceElement && priceElement.textContent.trim()) {
-          console.log('Found price with selector:', selector);
-          break;
-        }
-      }
-      if (priceElement) break;
-    }
-    
-    if (priceElement) {
-      price = priceElement.textContent.trim().replace(/[^\d.,]/g, '');
     }
 
     // Enhanced image extraction
@@ -182,7 +150,6 @@
       name: name,
       description: description,
       link: link,
-      price: price,
       imageUrl: imageUrl
     });
   });
