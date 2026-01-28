@@ -1905,7 +1905,7 @@ async function loadListItems(listId) {
             if (itemData.notes && itemData.notes.trim() !== '') {
                 itemsWithNotes.push({ id: doc.id, name: itemData.name, notes: itemData.notes });
             }
-            if (Object.prototype.hasOwnProperty.call(itemData, 'price')) {
+            if (itemData.price !== undefined) {
                 itemsWithPrice.push({ id: doc.id, name: itemData.name });
             }
 
@@ -1953,24 +1953,38 @@ async function loadListItems(listId) {
         }
 
         if (itemsWithPrice.length > 0) {
-            const batch = database.batch();
-            itemsWithPrice.forEach(item => {
-                const itemRef = database.collection('lists').doc(listId).collection('items').doc(item.id);
-                batch.update(itemRef, { price: firebase.firestore.FieldValue.delete() });
-            });
+            const shouldDeletePrice = confirm(
+                `Found ${itemsWithPrice.length} item(s) with legacy price data. ` +
+                `Prices are no longer used and will be removed from the application. ` +
+                `Would you like to delete these prices now?
 
-            try {
-                await batch.commit();
-                console.log(`Deleted price data from ${itemsWithPrice.length} items`);
-                showToast(`Removed legacy price data from ${itemsWithPrice.length} item(s)`, 'success');
-                items.forEach(item => {
-                    if (item.price !== undefined) {
-                        delete item.price;
-                    }
+` +
+                `Items with prices:\n` +
+                itemsWithPrice.map(item => `• ${item.name}`).join('\n')
+            );
+
+            if (shouldDeletePrice) {
+                const batch = database.batch();
+                itemsWithPrice.forEach(item => {
+                    const itemRef = database.collection('lists').doc(listId).collection('items').doc(item.id);
+                    batch.update(itemRef, { price: firebase.firestore.FieldValue.delete() });
                 });
-            } catch (error) {
-                console.error('Error deleting price data:', error);
-                showToast('Error removing legacy price data', 'error');
+
+                try {
+                    await batch.commit();
+                    console.log(`Deleted price data from ${itemsWithPrice.length} items`);
+                    showToast(`Removed legacy price data from ${itemsWithPrice.length} item(s)`, 'success');
+                    items.forEach(item => {
+                        if (item.price !== undefined) {
+                            delete item.price;
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error deleting price data:', error);
+                    showToast('Error removing legacy price data', 'error');
+                }
+            } else {
+                console.log('User chose not to delete existing price data');
             }
         }
 
