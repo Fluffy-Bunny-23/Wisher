@@ -1893,6 +1893,7 @@ async function loadListItems(listId) {
 
         // Check for existing notes and prompt for deletion
         const itemsWithNotes = [];
+        const itemsWithPrice = [];
         itemsSnapshot.forEach(doc => {
             const itemData = doc.data();
             // Ensure comments array exists
@@ -1903,6 +1904,9 @@ async function loadListItems(listId) {
             // Check if item has notes
             if (itemData.notes && itemData.notes.trim() !== '') {
                 itemsWithNotes.push({ id: doc.id, name: itemData.name, notes: itemData.notes });
+            }
+            if (itemData.price !== undefined && itemData.price !== null && `${itemData.price}`.trim() !== '') {
+                itemsWithPrice.push({ id: doc.id, name: itemData.name });
             }
 
             items.push({ id: doc.id, ...itemData });
@@ -1945,6 +1949,28 @@ async function loadListItems(listId) {
                 }
             } else {
                 console.log('User chose not to delete existing notes');
+            }
+        }
+
+        if (itemsWithPrice.length > 0) {
+            const batch = db.batch();
+            itemsWithPrice.forEach(item => {
+                const itemRef = db.collection('lists').doc(listId).collection('items').doc(item.id);
+                batch.update(itemRef, { price: firebase.firestore.FieldValue.delete() });
+            });
+
+            try {
+                await batch.commit();
+                console.log(`Deleted price data from ${itemsWithPrice.length} items`);
+                showToast(`Removed legacy price data from ${itemsWithPrice.length} item(s)`, 'success');
+                items.forEach(item => {
+                    if (item.price !== undefined) {
+                        delete item.price;
+                    }
+                });
+            } catch (error) {
+                console.error('Error deleting price data:', error);
+                showToast('Error removing legacy price data', 'error');
             }
         }
 
