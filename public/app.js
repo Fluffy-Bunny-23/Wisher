@@ -1905,7 +1905,7 @@ async function loadListItems(listId) {
             if (itemData.notes && itemData.notes.trim() !== '') {
                 itemsWithNotes.push({ id: doc.id, name: itemData.name, notes: itemData.notes });
             }
-            if (itemData.price !== undefined && itemData.price !== null && `${itemData.price}`.trim() !== '') {
+            if (Object.prototype.hasOwnProperty.call(itemData, 'price')) {
                 itemsWithPrice.push({ id: doc.id, name: itemData.name });
             }
 
@@ -1926,9 +1926,9 @@ async function loadListItems(listId) {
 
             if (shouldDeleteNotes) {
                 // Delete notes from all items in database
-                const batch = db.batch();
+                const batch = database.batch();
                 itemsWithNotes.forEach(item => {
-                    const itemRef = db.collection('lists').doc(listId).collection('items').doc(item.id);
+                    const itemRef = database.collection('lists').doc(listId).collection('items').doc(item.id);
                     batch.update(itemRef, { notes: firebase.firestore.FieldValue.delete() });
                 });
 
@@ -1953,9 +1953,9 @@ async function loadListItems(listId) {
         }
 
         if (itemsWithPrice.length > 0) {
-            const batch = db.batch();
+            const batch = database.batch();
             itemsWithPrice.forEach(item => {
-                const itemRef = db.collection('lists').doc(listId).collection('items').doc(item.id);
+                const itemRef = database.collection('lists').doc(listId).collection('items').doc(item.id);
                 batch.update(itemRef, { price: firebase.firestore.FieldValue.delete() });
             });
 
